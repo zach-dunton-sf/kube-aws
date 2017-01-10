@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -20,7 +21,6 @@ import (
 	model "github.com/coreos/kube-aws/model"
 	"github.com/coreos/kube-aws/netutil"
 	yaml "gopkg.in/yaml.v2"
-	"strconv"
 )
 
 const (
@@ -302,6 +302,8 @@ type Subnet struct {
 	AvailabilityZone  string `yaml:"availabilityZone,omitempty"`
 	InstanceCIDR      string `yaml:"instanceCIDR,omitempty"`
 	lastAllocatedAddr *net.IP
+	SubnetId          string `yaml:"subnetId,omitempty"`
+	SubnetLogicalName string
 }
 
 type Experimental struct {
@@ -493,8 +495,9 @@ func (c Cluster) Config() (*Config, error) {
 
 	// Reset lastAllocatedAddr or we'll end up returning different cluster config w/ inconsistent static private ips
 	// for each time we call this function `cluster.Config()`
-	for _, subnet := range config.Subnets {
+	for idx, subnet := range config.Subnets {
 		subnet.lastAllocatedAddr = nil
+		subnet.SubnetLogicalName = fmt.Sprintf("Subnet%v", idx)
 	}
 
 	for etcdIndex := 0; etcdIndex < config.EtcdCount; etcdIndex++ {
@@ -876,7 +879,11 @@ func (c DeploymentSettings) Valid() (*DeploymentValidationResult, error) {
 		}
 
 		var instanceCIDRs = make([]*net.IPNet, 0)
+
 		for i, subnet := range c.Subnets {
+			if subnet.SubnetId != "" {
+				continue
+			}
 			if subnet.AvailabilityZone == "" {
 				return nil, fmt.Errorf("availabilityZone must be set for subnet #%d", i)
 			}
@@ -999,7 +1006,6 @@ Validates the an existing VPC and it's existing subnets do not conflict with thi
 cluster configuration
 */
 func (c *Cluster) ValidateExistingVPC(existingVPCCIDR string, existingSubnetCIDRS []string) error {
-
 	_, existingVPC, err := net.ParseCIDR(existingVPCCIDR)
 	if err != nil {
 		return fmt.Errorf("error parsing existing vpc cidr %s : %v", existingVPCCIDR, err)
@@ -1034,19 +1040,23 @@ func (c *Cluster) ValidateExistingVPC(existingVPCCIDR string, existingSubnetCIDR
 	// Loop through all subnets
 	// Note: legacy instanceCIDR/availabilityZone stuff has already been marshalled into this format
 	for _, subnet := range c.Subnets {
-		_, instanceNet, err := net.ParseCIDR(subnet.InstanceCIDR)
-		if err != nil {
-			return fmt.Errorf("error parsing instances cidr %s : %v", c.InstanceCIDR, err)
-		}
+		if subnet.SubnetId != "" {
+			continue
+		} else {
+			_, instanceNet, err := net.ParseCIDR(subnet.InstanceCIDR)
+			if err != nil {
+				return fmt.Errorf("error parsing instances cidr %s : %v", c.InstanceCIDR, err)
+			}
 
-		//Loop through all existing subnets in the VPC and look for conflicting CIDRS
-		for _, existingSubnet := range existingSubnets {
-			if netutil.CidrOverlap(instanceNet, existingSubnet) {
-				return fmt.Errorf(
-					"instance cidr (%s) conflicts with existing subnet cidr=%s",
-					instanceNet,
-					existingSubnet,
-				)
+			//Loop through all existing subnets in the VPC and look for conflicting CIDRS
+			for _, existingSubnet := range existingSubnets {
+				if netutil.CidrOverlap(instanceNet, existingSubnet) {
+					return fmt.Errorf(
+						"instance cidr (%s) conflicts with existing subnet cidr=%s",
+						instanceNet,
+						existingSubnet,
+					)
+				}
 			}
 		}
 	}
@@ -1142,4 +1152,12 @@ func withHostedZoneIDPrefix(id string) string {
 		return fmt.Sprintf("%s%s", hostedZoneIDPrefix, id)
 	}
 	return id
+}
+
+// Ref returns SubnetId or ref to newly created resource
+func (s Subnet) Ref() string {
+	if s.SubnetId != "" {
+		return fmt.Sprintf("%q", s.SubnetId)
+	}
+	return fmt.Sprintf(`{"Ref" : "%s"}`, s.SubnetLogicalName)
 }

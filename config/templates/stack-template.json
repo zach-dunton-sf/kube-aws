@@ -51,12 +51,8 @@
         {{end}}
         "VPCZoneIdentifier": [
           {{range $index, $subnet := .Subnets}}
-          {{with $subnetLogicalName := printf "Subnet%d" $index}}
           {{if gt $index 0}},{{end}}
-          {
-            "Ref": "{{$subnetLogicalName}}"
-          }
-          {{end}}
+          {{$subnet.Ref}}
           {{end}}
         ]
       },
@@ -124,12 +120,8 @@
         ],
         "VPCZoneIdentifier": [
           {{range $index, $subnet := .Subnets}}
-          {{with $subnetLogicalName := printf "Subnet%d" $index}}
           {{if gt $index 0}},{{end}}
-          {
-            "Ref": "{{$subnetLogicalName}}"
-          }
-          {{end}}
+          {{$subnet.Ref}}
           {{end}}
         ],
         "LoadBalancerNames" : [
@@ -460,9 +452,7 @@
               }
             ],
             "PrivateIpAddress": "{{$etcdInstance.IPAddress}}",
-            "SubnetId": {
-              "Ref": "Subnet{{$etcdInstance.SubnetIndex}}"
-            }
+            "SubnetId": {{ (index $.Subnets $etcdInstance.SubnetIndex).Ref}}
           }
         ],
         "Tags": [
@@ -596,7 +586,7 @@
 	"Subnets" : [
           {{range $index, $subnet := .Subnets}}
           {{if gt $index 0}},{{end}}
-          { "Ref" : "Subnet{{$index}}" }
+          {{$subnet.Ref}}
           {{end}}
 	],
 	"Listeners" : [
@@ -1020,9 +1010,9 @@
     }
     {{end}}
     {{range $index, $subnet := .Subnets}}
-    {{with $subnetLogicalName := printf "Subnet%d" $index}}
+    {{if not $subnet.SubnetId }}
     ,
-    "{{$subnetLogicalName}}": {
+    "{{$subnet.SubnetLogicalName}}": {
       "Properties": {
         "AvailabilityZone": "{{$subnet.AvailabilityZone}}",
         "CidrBlock": "{{$subnet.InstanceCIDR}}",
@@ -1030,7 +1020,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "{{$.ClusterName}}-{{$subnetLogicalName}}"
+            "Value": "{{$.ClusterName}}-{{$subnet.SubnetLogicalName}}"
           },
           {
             "Key": "KubernetesCluster",
@@ -1041,17 +1031,17 @@
       },
       "Type": "AWS::EC2::Subnet"
     }
+    {{end}}
     {{if $.ElasticFileSystemID}}
     ,
-    "{{$subnetLogicalName}}MountTarget": {
+    "{{$subnet.SubnetLogicalName}}MountTarget": {
       "Properties" : {
         "FileSystemId": "{{$.ElasticFileSystemID}}",
-        "SubnetId": { "Ref": "{{$subnetLogicalName}}" },
+        "SubnetId": {{$subnet.Ref}},
         "SecurityGroups": [ { "Ref": "SecurityGroupMountTarget" } ]
       },
       "Type" : "AWS::EFS::MountTarget"
     }
-    {{end}}
     {{end}}
     {{end}}
     {{if not .VPCID}}
@@ -1126,14 +1116,12 @@
       "Type": "AWS::EC2::VPCGatewayAttachment"
     }
     {{range $index, $subnet := .Subnets}}
-    {{with $subnetLogicalName := printf "Subnet%d" $index}}
+    {{if not $subnet.SubnetId }}
     ,
-    "{{$subnetLogicalName}}RouteTableAssociation": {
+    "{{$subnet.SubnetLogicalName}}RouteTableAssociation": {
       "Properties": {
         "RouteTableId": { "Ref" : "RouteTable"},
-        "SubnetId": {
-          "Ref": "{{$subnetLogicalName}}"
-        }
+        "SubnetId": {{$subnet.Ref}}
       },
       "Type": "AWS::EC2::SubnetRouteTableAssociation"
     }
@@ -1142,14 +1130,12 @@
     {{else}}
     {{if .RouteTableID}}
     {{range $index, $subnet := .Subnets}}
-    {{with $subnetLogicalName := printf "Subnet%d" $index}}
+    {{if not $subnet.SubnetId }}
     ,
-    "{{$subnetLogicalName}}RouteTableAssociation": {
+    "{{$subnet.SubnetLogicalName}}RouteTableAssociation": {
       "Properties": {
         "RouteTableId": "{{$.RouteTableID}}",
-        "SubnetId": {
-          "Ref": "{{$subnetLogicalName}}"
-        }
+        "SubnetId": {{$subnet.Ref}}
       },
       "Type": "AWS::EC2::SubnetRouteTableAssociation"
     }
