@@ -110,6 +110,7 @@ func runCmdInit(cmd *cobra.Command, args []string) error {
 	}
 
 	initOpts.ClusterName = main.ClusterName
+	initOpts.ManageCertificates = main.ManageCertificates
 
 	// Required and shared settings for the node pool.
 	//
