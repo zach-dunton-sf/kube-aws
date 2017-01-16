@@ -1,9 +1,12 @@
 package texttemplate
 
 import (
+	"fmt"
 	"bytes"
 	"io/ioutil"
 	"text/template"
+	"crypto/sha1"
+	"net/url"
 )
 
 func GetBytesBuffer(filename string, data interface{}) (*bytes.Buffer, error) {
@@ -11,7 +14,13 @@ func GetBytesBuffer(filename string, data interface{}) (*bytes.Buffer, error) {
 	if err != nil {
 		return nil, err
 	}
-	tmpl, err := template.New(filename).Parse(string(raw))
+	funcMap := template.FuncMap{
+		"sha1": func(v string) string { return fmt.Sprintf("%x", sha1.Sum([]byte(v))) },
+		"urlparse": url.Parse,
+	}
+
+
+	tmpl, err := template.New(filename).Funcs(funcMap).Parse(string(raw))
 	if err != nil {
 		return nil, err
 	}
