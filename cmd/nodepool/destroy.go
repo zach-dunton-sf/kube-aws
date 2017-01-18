@@ -34,10 +34,10 @@ func runCmdDestroy(cmd *cobra.Command, args []string) error {
 	}
 
 	// call it here purely to make it compile
-        stackConf, err := cfg.RenderStackTemplate(stackTemplateOptions(), upOpts.export, "")
-        if err != nil {
-                return fmt.Errorf("Failed to render stack template: %v", err)
-        }
+	stackConf, err := cfg.RenderStackTemplate(stackTemplateOptions(), upOpts.export, "")
+	if err != nil {
+		return fmt.Errorf("Failed to render stack template: %v", err)
+	}
 
 	c := cluster.New(stackConf, destroyOpts.awsDebug)
 	if err := c.Destroy(); err != nil {

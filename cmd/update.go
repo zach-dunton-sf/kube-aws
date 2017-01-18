@@ -33,21 +33,21 @@ func init() {
 }
 
 func runCmdUpdate(cmd *cobra.Command, args []string) error {
-        // Up flags.
-        required := []struct {
-                name, val string
-        }{
-                {"--s3-uri", updateOpts.s3URI},
-        }
-        var missing []string
-        for _, req := range required {
-                if req.val == "" {
-                        missing = append(missing, strconv.Quote(req.name))
-                }
-        }
-        if len(missing) != 0 {
-                return fmt.Errorf("Missing required flag(s): %s", strings.Join(missing, ", "))
-        }
+	// Up flags.
+	required := []struct {
+		name, val string
+	}{
+		{"--s3-uri", updateOpts.s3URI},
+	}
+	var missing []string
+	for _, req := range required {
+		if req.val == "" {
+			missing = append(missing, strconv.Quote(req.name))
+		}
+	}
+	if len(missing) != 0 {
+		return fmt.Errorf("Missing required flag(s): %s", strings.Join(missing, ", "))
+	}
 
 	confCluster, err := config.ClusterFromFile(configPath)
 	if err != nil {

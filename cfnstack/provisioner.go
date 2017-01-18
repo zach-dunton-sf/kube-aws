@@ -241,7 +241,7 @@ func (c *Provisioner) UpdateStackAndWait(cfSvc CRUDService, s3Svc S3ObjectPutter
 func (c *Provisioner) Validate(stackBody string, s3URI string) (string, error) {
 	validateInput := cloudformation.ValidateTemplateInput{}
 
-	templateURL, uploadErr := c.uploadTemplates(s3.New(c.session), map[string]string{ "stack.json": stackBody}, s3URI)
+	templateURL, uploadErr := c.uploadTemplates(s3.New(c.session), map[string]string{"stack.json": stackBody}, s3URI)
 
 	if uploadErr != nil {
 		return "", fmt.Errorf("template upload failed: %v", uploadErr)

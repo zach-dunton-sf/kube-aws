@@ -33,22 +33,21 @@ func init() {
 }
 
 func runCmdUpdate(cmd *cobra.Command, args []string) error {
-        // Update flags.
-        required := []struct {
-                name, val string
-        }{
-                {"--s3-uri", updateOpts.s3URI},
-        }
-        var missing []string
-        for _, req := range required {
-                if req.val == "" {
-                        missing = append(missing, strconv.Quote(req.name))
-                }
-        }
-        if len(missing) != 0 {
-                return fmt.Errorf("Missing required flag(s): %s", strings.Join(missing, ", "))
-        }
-
+	// Update flags.
+	required := []struct {
+		name, val string
+	}{
+		{"--s3-uri", updateOpts.s3URI},
+	}
+	var missing []string
+	for _, req := range required {
+		if req.val == "" {
+			missing = append(missing, strconv.Quote(req.name))
+		}
+	}
+	if len(missing) != 0 {
+		return fmt.Errorf("Missing required flag(s): %s", strings.Join(missing, ", "))
+	}
 
 	conf, err := config.ClusterFromFile(nodePoolClusterConfigFilePath())
 	if err != nil {
