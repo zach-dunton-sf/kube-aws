@@ -14,7 +14,6 @@ import (
 	"github.com/coreos/kube-aws/filereader/userdatatemplate"
 	model "github.com/coreos/kube-aws/model"
 	"gopkg.in/yaml.v2"
-	"io/ioutil"
 	"path/filepath"
 	"strings"
 )
