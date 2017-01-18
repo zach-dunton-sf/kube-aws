@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -20,7 +21,6 @@ import (
 	model "github.com/coreos/kube-aws/model"
 	"github.com/coreos/kube-aws/netutil"
 	yaml "gopkg.in/yaml.v2"
-	"strconv"
 )
 
 const (
@@ -657,9 +657,9 @@ func (c Cluster) ValidateUserData(opts StackTemplateOptions) error {
 	}
 
 	err = userdatavalidation.Execute([]userdatavalidation.Entry{
-		{"UserDataWorker", stackConfig.UserDataWorker},
-		{"UserDataController", stackConfig.UserDataController},
-		{"UserDataEtcd", stackConfig.UserDataEtcd},
+		{Name: "UserDataWorker", Content: stackConfig.UserDataWorker},
+		{Name: "UserDataController", Content: stackConfig.UserDataController},
+		{Name: "UserDataEtcd", Content: stackConfig.UserDataEtcd},
 	})
 
 	return err
@@ -835,8 +835,8 @@ func (c DeploymentSettings) Valid() (*DeploymentValidationResult, error) {
 		return nil, fmt.Errorf("releaseChannel %s is not supported", c.ReleaseChannel)
 	}
 
-	if c.KeyName == "" {
-		return nil, errors.New("keyName must be set")
+	if c.KeyName == "" && len(c.SSHAuthorizedKeys) == 0 {
+		return nil, errors.New("Either keyName or sshAuthorizedKeys must be set")
 	}
 	if c.ClusterName == "" {
 		return nil, errors.New("clusterName must be set")

@@ -454,7 +454,7 @@
         },
         "ImageId": "{{$.AMI}}",
         "InstanceType": "{{$.EtcdInstanceType}}",
-        "KeyName": "{{$.KeyName}}",
+        {{if $.KeyName}}"KeyName": "{{$.KeyName}}",{{end}}
         "NetworkInterfaces": [
           {
             "AssociatePublicIpAddress": {{$.MapPublicIPs}},
@@ -506,7 +506,7 @@
         },
         "ImageId": "{{.AMI}}",
         "InstanceType": "{{.WorkerInstanceType}}",
-        "KeyName": "{{.KeyName}}",
+        {{if .KeyName}}"KeyName": "{{.KeyName}}",{{end}}
         "SecurityGroups": [
           {{range $sgRef := .WorkerSecurityGroupRefs}}
             {{$sgRef}},
@@ -560,7 +560,7 @@
         },
         "ImageId": "{{.AMI}}",
         "InstanceType": "{{.ControllerInstanceType}}",
-        "KeyName": "{{.KeyName}}",
+        {{if .KeyName}}"KeyName": "{{.KeyName}}",{{end}}
         "SecurityGroups": [
           {
             "Ref": "SecurityGroupController"
