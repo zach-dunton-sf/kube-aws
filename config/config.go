@@ -577,7 +577,7 @@ func (c Cluster) stackConfig(opts StackTemplateOptions, compressUserData bool) (
 		stackConfig.Config.TLSConfig = compactAssets
 	}
 
-	if stackConfig.UserDataWorker, err = userdatatemplate.GetString(opts.WorkerTmplFile, stackConfig.Config, compressUserData); err != nil {
+	if stackConfig.UserDataWorker, err = userdatatemplate.GetString(opts.WorkerTmplFile, stackConfig.Config, false); err != nil {
 		return nil, fmt.Errorf("failed to render worker cloud config: %v", err)
 	}
 	if stackConfig.UserDataController, err = userdatatemplate.GetString(opts.ControllerTmplFile, stackConfig.Config, false); err != nil {
