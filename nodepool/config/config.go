@@ -5,6 +5,8 @@ package config
 
 import (
 	"fmt"
+	"io/ioutil"
+
 	cfg "github.com/coreos/kube-aws/config"
 	"github.com/coreos/kube-aws/coreos/amiregistry"
 	"github.com/coreos/kube-aws/coreos/userdatavalidation"
@@ -13,6 +15,7 @@ import (
 	model "github.com/coreos/kube-aws/model"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
+	"path/filepath"
 	"strings"
 )
 
@@ -28,12 +31,16 @@ type ComputedConfig struct {
 }
 
 type ProvidedConfig struct {
+	MainClusterSettings
 	cfg.KubeClusterSettings `yaml:",inline"`
 	cfg.WorkerSettings      `yaml:",inline"`
 	cfg.DeploymentSettings  `yaml:",inline"`
-	EtcdEndpoints           string `yaml:"etcdEndpoints,omitempty"`
 	NodePoolName            string `yaml:"nodePoolName,omitempty"`
 	providedEncryptService  cfg.EncryptService
+}
+
+type MainClusterSettings struct {
+	EtcdInstances []model.EtcdInstance
 }
 
 type StackTemplateOptions struct {
@@ -79,7 +86,7 @@ func (c ProvidedConfig) ValidateUserData(opts StackTemplateOptions) error {
 	}
 
 	err = userdatavalidation.Execute([]userdatavalidation.Entry{
-		{"UserDataWorker", stackConfig.UserDataWorker},
+		{Name: "UserDataWorker", Content: stackConfig.UserDataWorker},
 	})
 
 	return err
@@ -108,7 +115,22 @@ func ClusterFromFile(filename string) (*ProvidedConfig, error) {
 		return nil, err
 	}
 
-	c, err := ClusterFromBytes(data)
+	abs, err := filepath.Abs(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to obtain the absolute path to %s : %v", filename, err)
+	}
+	mainDir := filepath.Dir(filepath.Dir(filepath.Dir(abs)))
+	mainClusterPath := filepath.Join(mainDir, "cluster.yaml")
+	mainCluster, err := cfg.ClusterFromFile(mainClusterPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load %s : %v", mainClusterPath, err)
+	}
+	mainConfig, err := mainCluster.Config()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate main cluster config : %v", err)
+	}
+
+	c, err := ClusterFromBytes(data, mainConfig)
 	if err != nil {
 		return nil, fmt.Errorf("file %s: %v", filename, err)
 	}
@@ -126,7 +148,7 @@ func NewDefaultCluster() *ProvidedConfig {
 }
 
 // ClusterFromBytes Necessary for unit tests, which store configs as hardcoded strings
-func ClusterFromBytes(data []byte) (*ProvidedConfig, error) {
+func ClusterFromBytes(data []byte, main *cfg.Config) (*ProvidedConfig, error) {
 	c := NewDefaultCluster()
 	if err := yaml.Unmarshal(data, c); err != nil {
 		return nil, fmt.Errorf("failed to parse cluster: %v", err)
@@ -166,6 +188,8 @@ func ClusterFromBytes(data []byte) (*ProvidedConfig, error) {
 			},
 		}
 	}
+
+	c.EtcdInstances = main.EtcdInstances
 
 	return c, nil
 }

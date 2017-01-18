@@ -4,11 +4,11 @@ package config
 //go:generate gofmt -w templates.go
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -20,7 +20,6 @@ import (
 	model "github.com/coreos/kube-aws/model"
 	"github.com/coreos/kube-aws/netutil"
 	yaml "gopkg.in/yaml.v2"
-	"strconv"
 )
 
 const (
@@ -70,7 +69,7 @@ func NewDefaultCluster() *Cluster {
 			ClusterName:        "kubernetes",
 			VPCCIDR:            "10.0.0.0/16",
 			ReleaseChannel:     "stable",
-			K8sVer:             "v1.5.1_coreos.0",
+			K8sVer:             "v1.5.2_coreos.0",
 			HyperkubeImageRepo: "quay.io/coreos/hyperkube",
 			AWSCliImageRepo:    "quay.io/coreos/awscli",
 			AWSCliTag:          "master",
@@ -78,6 +77,7 @@ func NewDefaultCluster() *Cluster {
 			Subnets:            []*Subnet{},
 			MapPublicIPs:       true,
 			Experimental:       experimental,
+			ManageCertificates: true,
 		},
 		KubeClusterSettings: KubeClusterSettings{
 			DNSServiceIP: "10.3.0.10",
@@ -233,6 +233,7 @@ type DeploymentSettings struct {
 	ElasticFileSystemID string            `yaml:"elasticFileSystemId,omitempty"`
 	SSHAuthorizedKeys   []string          `yaml:"sshAuthorizedKeys,omitempty"`
 	Experimental        Experimental      `yaml:"experimental"`
+	ManageCertificates  bool              `yaml:"manageCertificates,omitempty"`
 }
 
 // Part of configuration which is specific to worker nodes
@@ -488,83 +489,22 @@ func (c Cluster) Config() (*Config, error) {
 		config.VPCRef = fmt.Sprintf("%q", config.VPCID)
 	}
 
-	config.EtcdInstances = make([]etcdInstance, config.EtcdCount)
-	var etcdEndpoints, etcdInitialCluster bytes.Buffer
-
-	// Reset lastAllocatedAddr or we'll end up returning different cluster config w/ inconsistent static private ips
-	// for each time we call this function `cluster.Config()`
-	for _, subnet := range config.Subnets {
-		subnet.lastAllocatedAddr = nil
-	}
+	config.EtcdInstances = make([]model.EtcdInstance, config.EtcdCount)
 
 	for etcdIndex := 0; etcdIndex < config.EtcdCount; etcdIndex++ {
 
 		//Round-robbin etcd instances across all available subnets
 		subnetIndex := etcdIndex % len(config.Subnets)
-		subnet := config.Subnets[subnetIndex]
 
-		_, subnetCIDR, err := net.ParseCIDR(subnet.InstanceCIDR)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing subnet instance cidr %s: %v", subnet.InstanceCIDR, err)
-		}
-
-		if subnet.lastAllocatedAddr == nil {
-			ip := subnetCIDR.IP
-			//TODO:(chom) this is sloppy, but "soon-ish" etcd with be self-hosted so we'll leave this be
-			for i := 0; i < 3; i++ {
-				ip = netutil.IncrementIP(ip)
-			}
-			subnet.lastAllocatedAddr = &ip
-		}
-
-		nextAddr := netutil.IncrementIP(*subnet.lastAllocatedAddr)
-		subnet.lastAllocatedAddr = &nextAddr
-		instance := etcdInstance{
-			IPAddress:   *subnet.lastAllocatedAddr,
+		instance := model.EtcdInstance{
 			SubnetIndex: subnetIndex,
 		}
 
-		//TODO(chom): validate we're not overflowing the address space
-		//This is complicated, must also factor in DHCP addresses
-		//for ASG components
-
-		//Punt on this- we're going to have an answer for dynamic etcd clusters at some point. Then we can either throw
-		//the instances in an ASG and use DHCP like all other instances, or simply self-host on cluster
-
 		config.EtcdInstances[etcdIndex] = instance
-
-		//TODO: ipv6 support
-		if len(instance.IPAddress) != 4 {
-			return nil, fmt.Errorf("Non ipv4 address for etcd node: %v", instance.IPAddress)
-		}
 
 		//http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-instance-addressing.html#concepts-private-addresses
 
-		var dnsSuffix string
-		if config.Region == "us-east-1" {
-			// a special DNS suffix for the original AWS region!
-			dnsSuffix = "ec2.internal"
-		} else {
-			dnsSuffix = fmt.Sprintf("%s.compute.internal", config.Region)
-		}
-
-		hostname := fmt.Sprintf("ip-%d-%d-%d-%d.%s",
-			instance.IPAddress[0],
-			instance.IPAddress[1],
-			instance.IPAddress[2],
-			instance.IPAddress[3],
-			dnsSuffix,
-		)
-
-		fmt.Fprintf(&etcdEndpoints, "https://%s:2379", hostname)
-		fmt.Fprintf(&etcdInitialCluster, "%s=https://%s:2380", hostname, hostname)
-		if etcdIndex < config.EtcdCount-1 {
-			fmt.Fprintf(&etcdEndpoints, ",")
-			fmt.Fprintf(&etcdInitialCluster, ",")
-		}
 	}
-	config.EtcdEndpoints = etcdEndpoints.String()
-	config.EtcdInitialCluster = etcdInitialCluster.String()
 
 	config.IsChinaRegion = strings.HasPrefix(config.Region, "cn")
 
@@ -623,16 +563,19 @@ func (c Cluster) stackConfig(opts StackTemplateOptions, compressUserData bool) (
 		return nil, err
 	}
 
-	compactAssets, err := ReadOrCreateCompactTLSAssets(opts.TLSAssetsDir, KMSConfig{
-		Region:         stackConfig.Config.Region,
-		KMSKeyARN:      c.KMSKeyARN,
-		EncryptService: c.providedEncryptService,
-	})
-	if err != nil {
-		return nil, err
-	}
+	var compactAssets *CompactTLSAssets
 
-	stackConfig.Config.TLSConfig = compactAssets
+	if c.ManageCertificates {
+		compactAssets, err = ReadOrCreateCompactTLSAssets(opts.TLSAssetsDir, KMSConfig{
+			Region:         stackConfig.Config.Region,
+			KMSKeyARN:      c.KMSKeyARN,
+			EncryptService: c.providedEncryptService,
+		})
+		if err != nil {
+			return nil, err
+		}
+		stackConfig.Config.TLSConfig = compactAssets
+	}
 
 	if stackConfig.UserDataWorker, err = userdatatemplate.GetString(opts.WorkerTmplFile, stackConfig.Config, compressUserData); err != nil {
 		return nil, fmt.Errorf("failed to render worker cloud config: %v", err)
@@ -654,9 +597,9 @@ func (c Cluster) ValidateUserData(opts StackTemplateOptions) error {
 	}
 
 	err = userdatavalidation.Execute([]userdatavalidation.Entry{
-		{"UserDataWorker", stackConfig.UserDataWorker},
-		{"UserDataController", stackConfig.UserDataController},
-		{"UserDataEtcd", stackConfig.UserDataEtcd},
+		{Name: "UserDataWorker", Content: stackConfig.UserDataWorker},
+		{Name: "UserDataController", Content: stackConfig.UserDataController},
+		{Name: "UserDataEtcd", Content: stackConfig.UserDataEtcd},
 	})
 
 	return err
@@ -678,17 +621,10 @@ func (c Cluster) RenderStackTemplate(opts StackTemplateOptions, prettyPrint bool
 	return stackConfig, nil
 }
 
-type etcdInstance struct {
-	IPAddress   net.IP
-	SubnetIndex int
-}
-
 type Config struct {
 	Cluster
 
-	EtcdEndpoints      string
-	EtcdInitialCluster string
-	EtcdInstances      []etcdInstance
+	EtcdInstances []model.EtcdInstance
 
 	// Encoded TLS assets
 	TLSConfig *CompactTLSAssets
@@ -834,13 +770,13 @@ func (c DeploymentSettings) Valid() (*DeploymentValidationResult, error) {
 		return nil, fmt.Errorf("releaseChannel %s is not supported", c.ReleaseChannel)
 	}
 
-	if c.KeyName == "" {
-		return nil, errors.New("keyName must be set")
+	if c.KeyName == "" && len(c.SSHAuthorizedKeys) == 0 {
+		return nil, errors.New("Either keyName or sshAuthorizedKeys must be set")
 	}
 	if c.ClusterName == "" {
 		return nil, errors.New("clusterName must be set")
 	}
-	if c.KMSKeyARN == "" {
+	if c.KMSKeyARN == "" && c.ManageCertificates {
 		return nil, errors.New("kmsKeyArn must be set")
 	}
 
@@ -1098,7 +1034,7 @@ func (c WorkerDeploymentSettings) StackTags() map[string]string {
 	}
 
 	if c.Worker.ClusterAutoscaler.Enabled() {
-		tags["kube-aws:cluster-autoscaler:logical-name"] = "AutoScaleWorker"
+		tags["kube-aws:cluster-autoscaler:logical-name"] = c.Worker.LogicalName()
 		tags["kube-aws:cluster-autoscaler:min-size"] = strconv.Itoa(c.Worker.ClusterAutoscaler.MinSize)
 		tags["kube-aws:cluster-autoscaler:max-size"] = strconv.Itoa(c.Worker.ClusterAutoscaler.MaxSize)
 	}
@@ -1112,10 +1048,6 @@ func (c WorkerDeploymentSettings) Valid() error {
 
 	if numSGs > 4 {
 		return fmt.Errorf("number of user provided security groups must be less than or equal to 4 but was %d (actual EC2 limit is 5 but one of them is reserved for kube-aws) : %v", numSGs, sgRefs)
-	}
-
-	if c.SpotFleet.Enabled() && c.Experimental.AwsEnvironment.Enabled {
-		return fmt.Errorf("The experimental feature `awsEnvironment` assumes a node pool is managed by an ASG rather than a Spot Fleet.")
 	}
 
 	if c.SpotFleet.Enabled() && c.Experimental.WaitSignal.Enabled {
