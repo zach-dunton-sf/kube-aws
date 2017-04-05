@@ -359,7 +359,6 @@ coreos:
         RestartSec=10
         Restart=on-failure
         ExecStartPre=/opt/bin/set-efs-pv
-        ExecStartPre=/usr/bin/systemctl is-active kube-node-taint-and-uncordon.service
         ExecStart=/opt/bin/load-efs-pv
 {{end}}
 
