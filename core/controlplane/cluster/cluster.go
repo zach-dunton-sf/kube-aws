@@ -116,6 +116,7 @@ func (c *ClusterRef) validateExistingVPCState(ec2Svc ec2Service) error {
 
 func NewCluster(cfg *config.Cluster, opts config.StackTemplateOptions, awsDebug bool) (*Cluster, error) {
 	cluster := NewClusterRef(cfg, awsDebug)
+	cluster.KubeResourcesAutosave.S3Path = fmt.Sprintf("%skube-aws/clusters/%s/backup", strings.TrimPrefix(opts.S3URI, "s3://"), cfg.ClusterName)
 	stackConfig, err := cluster.StackConfig(opts)
 	if err != nil {
 		return nil, err
@@ -348,11 +349,6 @@ func (c *Cluster) Update() (string, error) {
 	return updateOutput, err
 }
 
-func (c *ClusterRef) Info() (*Info, error) {
-	describer := NewClusterDescriber(c.ClusterName, c.StackName(), c.session)
-	return describer.Info()
-}
-
 func (c *ClusterRef) Destroy() error {
 	return cfnstack.NewDestroyer(c.StackName(), c.session).Destroy()
 }
@@ -444,9 +440,9 @@ func (c *ClusterRef) validateControllerRootVolume(ec2Svc ec2Service) error {
 	controllerRootVolume := &ec2.CreateVolumeInput{
 		DryRun:           aws.Bool(true),
 		AvailabilityZone: aws.String(c.AvailabilityZones()[0]),
-		Iops:             aws.Int64(int64(c.ControllerRootVolumeIOPS)),
-		Size:             aws.Int64(int64(c.ControllerRootVolumeSize)),
-		VolumeType:       aws.String(c.ControllerRootVolumeType),
+		Iops:             aws.Int64(int64(c.Controller.RootVolume.IOPS)),
+		Size:             aws.Int64(int64(c.Controller.RootVolume.Size)),
+		VolumeType:       aws.String(c.Controller.RootVolume.Type),
 	}
 
 	if _, err := ec2Svc.CreateVolume(controllerRootVolume); err != nil {

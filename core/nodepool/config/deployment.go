@@ -95,8 +95,12 @@ func (c DeploymentSettings) WithDefaultsFrom(main cfg.DeploymentSettings) Deploy
 	c.HyperkubeImage.Tag = c.K8sVer
 	c.AWSCliImage.MergeIfEmpty(main.AWSCliImage)
 	c.CalicoCtlImage.MergeIfEmpty(main.CalicoCtlImage)
+	c.CalicoCniImage.MergeIfEmpty(main.CalicoCniImage)
 	c.PauseImage.MergeIfEmpty(main.PauseImage)
 	c.FlannelImage.MergeIfEmpty(main.FlannelImage)
+
+	// Inherit main TLS bootstrap config
+	c.Experimental.TLSBootstrap = main.Experimental.TLSBootstrap
 
 	if len(c.SSHAuthorizedKeys) == 0 {
 		c.SSHAuthorizedKeys = main.SSHAuthorizedKeys
@@ -108,9 +112,13 @@ func (c DeploymentSettings) WithDefaultsFrom(main cfg.DeploymentSettings) Deploy
 	// * Region
 	// * ContainerRuntime
 	// * KMSKeyARN
+	// * ElasticFileSystemID
 	c.Region = main.Region
 	c.ContainerRuntime = main.ContainerRuntime
 	c.KMSKeyARN = main.KMSKeyARN
+	// TODO Allow providing (1) one or more elasticFileSystemId's to be mounted (2) either cluster-wide or per node pool.
+	// It currently supports only one elasticFileSystemId to be mounted cluster-wide
+	c.ElasticFileSystemID = main.ElasticFileSystemID
 
 	return c
 }

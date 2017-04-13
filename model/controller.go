@@ -6,16 +6,30 @@ import "errors"
 type Controller struct {
 	AutoScalingGroup   AutoScalingGroup  `yaml:"autoScalingGroup,omitempty"`
 	ClusterAutoscaler  ClusterAutoscaler `yaml:"clusterAutoscaler,omitempty"`
-	LoadBalancer       ControllerElb     `yaml:"loadBalancer,omitempty"`
-	ManagedIamRoleName string            `yaml:"managedIamRoleName,omitempty"`
-	Subnets            []Subnet          `yaml:"subnets,omitempty"`
+	EC2Instance        `yaml:",inline"`
+	LoadBalancer       ControllerElb       `yaml:"loadBalancer,omitempty"`
+	ManagedIamRoleName string              `yaml:"managedIamRoleName,omitempty"`
+	Subnets            []Subnet            `yaml:"subnets,omitempty"`
+	CustomFiles        []CustomFile        `yaml:"customFiles,omitempty"`
+	CustomSystemdUnits []CustomSystemdUnit `yaml:"customSystemdUnits,omitempty"`
 	UnknownKeys        `yaml:",inline"`
 }
 
+const DefaultControllerCount = 1
+
 func NewDefaultController() Controller {
-	n := 1
 	return Controller{
-		AutoScalingGroup: AutoScalingGroup{RollingUpdateMinInstancesInService: &n},
+		EC2Instance: EC2Instance{
+			Count:         DefaultControllerCount,
+			CreateTimeout: "PT15M",
+			InstanceType:  "t2.medium",
+			RootVolume: RootVolume{
+				Type: "gp2",
+				IOPS: 0,
+				Size: 30,
+			},
+			Tenancy: "default",
+		},
 	}
 }
 

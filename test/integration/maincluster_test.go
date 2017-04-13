@@ -2,16 +2,17 @@ package integration
 
 import (
 	"fmt"
+	"os"
+	"reflect"
+	"strings"
+	"testing"
+
 	"github.com/kubernetes-incubator/kube-aws/cfnstack"
 	controlplane_config "github.com/kubernetes-incubator/kube-aws/core/controlplane/config"
 	"github.com/kubernetes-incubator/kube-aws/core/root"
 	"github.com/kubernetes-incubator/kube-aws/core/root/config"
 	"github.com/kubernetes-incubator/kube-aws/model"
 	"github.com/kubernetes-incubator/kube-aws/test/helper"
-	"os"
-	"reflect"
-	"strings"
-	"testing"
 )
 
 type ConfigTester func(c *config.Config, t *testing.T)
@@ -42,20 +43,26 @@ func TestMainClusterConfig(t *testing.T) {
 		subnet1.Name = "Subnet0"
 		expected := controlplane_config.EtcdSettings{
 			Etcd: model.Etcd{
+				EC2Instance: model.EC2Instance{
+					Count:        1,
+					InstanceType: "t2.medium",
+					Tenancy:      "default",
+					RootVolume: model.RootVolume{
+						Size: 30,
+						Type: "gp2",
+						IOPS: 0,
+					},
+				},
+				DataVolume: model.DataVolume{
+					Size:      30,
+					Type:      "gp2",
+					IOPS:      0,
+					Ephemeral: false,
+				},
 				Subnets: []model.Subnet{
 					subnet1,
 				},
 			},
-			EtcdCount:               1,
-			EtcdInstanceType:        "t2.medium",
-			EtcdRootVolumeSize:      30,
-			EtcdRootVolumeType:      "gp2",
-			EtcdRootVolumeIOPS:      0,
-			EtcdDataVolumeSize:      30,
-			EtcdDataVolumeType:      "gp2",
-			EtcdDataVolumeIOPS:      0,
-			EtcdDataVolumeEphemeral: false,
-			EtcdTenancy:             "default",
 		}
 		actual := c.EtcdSettings
 		if !reflect.DeepEqual(expected, actual) {
@@ -93,6 +100,9 @@ func TestMainClusterConfig(t *testing.T) {
 				Enabled: false,
 			},
 			ClusterAutoscalerSupport: controlplane_config.ClusterAutoscalerSupport{
+				Enabled: false,
+			},
+			TLSBootstrap: controlplane_config.TLSBootstrap{
 				Enabled: false,
 			},
 			EphemeralImageStorage: controlplane_config.EphemeralImageStorage{
@@ -408,13 +418,31 @@ worker:
 			},
 		},
 		{
-			context: "WithEtcdDataVolumeEncrypted",
+			context: "WithElasticFileSystemId",
 			configYaml: minimalValidConfigYaml + `
-etcdDataVolumeEncrypted: true
+elasticFileSystemId: efs-12345
+worker:
+  nodePools:
+  - name: pool1
 `,
 			assertConfig: []ConfigTester{
 				func(c *config.Config, t *testing.T) {
-					if !c.EtcdDataVolumeEncrypted {
+					if c.NodePools[0].ElasticFileSystemID != "efs-12345" {
+						t.Errorf("The value of worker.nodePools[0].elasticFileSystemId should match the one for the top-leve elasticFileSystemId, but it wan't: worker.nodePools[0].elasticFileSystemId=%s", c.NodePools[0].ElasticFileSystemID)
+					}
+				},
+			},
+		},
+		{
+			context: "WithEtcdDataVolumeEncrypted",
+			configYaml: minimalValidConfigYaml + `
+etcd:
+  dataVolume:
+    encrypted: true
+`,
+			assertConfig: []ConfigTester{
+				func(c *config.Config, t *testing.T) {
+					if !c.Etcd.DataVolume.Encrypted {
 						t.Errorf("Etcd data volume should be encrypted but was not: %v", c.Etcd)
 					}
 				},
@@ -423,8 +451,9 @@ etcdDataVolumeEncrypted: true
 		{
 			context: "WithEtcdDataVolumeEncryptedKMSKeyARN",
 			configYaml: minimalValidConfigYaml + `
-etcdDataVolumeEncrypted: true
 etcd:
+  dataVolume:
+    encrypted: true
   kmsKeyArn: arn:aws:kms:eu-west-1:XXX:key/XXX
 `,
 			assertConfig: []ConfigTester{
@@ -432,6 +461,9 @@ etcd:
 					expected := "arn:aws:kms:eu-west-1:XXX:key/XXX"
 					if c.Etcd.KMSKeyARN() != expected {
 						t.Errorf("Etcd data volume KMS Key ARN didn't match : expected=%v actual=%v", expected, c.Etcd.KMSKeyARN())
+					}
+					if !c.Etcd.DataVolume.Encrypted {
+						t.Error("Etcd data volume should be encrypted but was not")
 					}
 				},
 			},
@@ -451,20 +483,26 @@ etcd:
 							Cluster: model.EtcdCluster{
 								MemberIdentityProvider: "eip",
 							},
+							EC2Instance: model.EC2Instance{
+								Count:        1,
+								InstanceType: "t2.medium",
+								Tenancy:      "default",
+								RootVolume: model.RootVolume{
+									Size: 30,
+									Type: "gp2",
+									IOPS: 0,
+								},
+							},
+							DataVolume: model.DataVolume{
+								Size:      30,
+								Type:      "gp2",
+								IOPS:      0,
+								Ephemeral: false,
+							},
 							Subnets: []model.Subnet{
 								subnet1,
 							},
 						},
-						EtcdCount:               1,
-						EtcdInstanceType:        "t2.medium",
-						EtcdRootVolumeSize:      30,
-						EtcdRootVolumeType:      "gp2",
-						EtcdRootVolumeIOPS:      0,
-						EtcdDataVolumeSize:      30,
-						EtcdDataVolumeType:      "gp2",
-						EtcdDataVolumeIOPS:      0,
-						EtcdDataVolumeEphemeral: false,
-						EtcdTenancy:             "default",
 					}
 					actual := c.EtcdSettings
 					if !reflect.DeepEqual(expected, actual) {
@@ -499,6 +537,22 @@ etcd:
 					subnet1.Name = "Subnet0"
 					expected := controlplane_config.EtcdSettings{
 						Etcd: model.Etcd{
+							EC2Instance: model.EC2Instance{
+								Count:        1,
+								InstanceType: "t2.medium",
+								RootVolume: model.RootVolume{
+									Size: 30,
+									Type: "gp2",
+									IOPS: 0,
+								},
+								Tenancy: "default",
+							},
+							DataVolume: model.DataVolume{
+								Size:      30,
+								Type:      "gp2",
+								IOPS:      0,
+								Ephemeral: false,
+							},
 							Cluster: model.EtcdCluster{
 								MemberIdentityProvider: "eni",
 							},
@@ -506,16 +560,6 @@ etcd:
 								subnet1,
 							},
 						},
-						EtcdCount:               1,
-						EtcdInstanceType:        "t2.medium",
-						EtcdRootVolumeSize:      30,
-						EtcdRootVolumeType:      "gp2",
-						EtcdRootVolumeIOPS:      0,
-						EtcdDataVolumeSize:      30,
-						EtcdDataVolumeType:      "gp2",
-						EtcdDataVolumeIOPS:      0,
-						EtcdDataVolumeEphemeral: false,
-						EtcdTenancy:             "default",
 					}
 					actual := c.EtcdSettings
 					if !reflect.DeepEqual(expected, actual) {
@@ -555,20 +599,25 @@ etcd:
 								MemberIdentityProvider: "eni",
 								InternalDomainName:     "internal.example.com",
 							},
-							Subnets: []model.Subnet{
+							EC2Instance: model.EC2Instance{
+								Count:        1,
+								InstanceType: "t2.medium",
+								RootVolume: model.RootVolume{
+									Size: 30,
+									Type: "gp2",
+									IOPS: 0,
+								},
+								Tenancy: "default",
+							},
+							DataVolume: model.DataVolume{
+								Size:      30,
+								Type:      "gp2",
+								IOPS:      0,
+								Ephemeral: false,
+							}, Subnets: []model.Subnet{
 								subnet1,
 							},
 						},
-						EtcdCount:               1,
-						EtcdInstanceType:        "t2.medium",
-						EtcdRootVolumeSize:      30,
-						EtcdRootVolumeType:      "gp2",
-						EtcdRootVolumeIOPS:      0,
-						EtcdDataVolumeSize:      30,
-						EtcdDataVolumeType:      "gp2",
-						EtcdDataVolumeIOPS:      0,
-						EtcdDataVolumeEphemeral: false,
-						EtcdTenancy:             "default",
 					}
 					actual := c.EtcdSettings
 					if !reflect.DeepEqual(expected, actual) {
@@ -612,6 +661,22 @@ etcd:
 								MemberIdentityProvider: "eni",
 								InternalDomainName:     "internal.example.com",
 							},
+							EC2Instance: model.EC2Instance{
+								Count:        1,
+								InstanceType: "t2.medium",
+								RootVolume: model.RootVolume{
+									Size: 30,
+									Type: "gp2",
+									IOPS: 0,
+								},
+								Tenancy: "default",
+							},
+							DataVolume: model.DataVolume{
+								Size:      30,
+								Type:      "gp2",
+								IOPS:      0,
+								Ephemeral: false,
+							},
 							Nodes: []model.EtcdNode{
 								model.EtcdNode{
 									FQDN: "etcd1a.internal.example.com",
@@ -627,16 +692,6 @@ etcd:
 								subnet1,
 							},
 						},
-						EtcdCount:               1,
-						EtcdInstanceType:        "t2.medium",
-						EtcdRootVolumeSize:      30,
-						EtcdRootVolumeType:      "gp2",
-						EtcdRootVolumeIOPS:      0,
-						EtcdDataVolumeSize:      30,
-						EtcdDataVolumeType:      "gp2",
-						EtcdDataVolumeIOPS:      0,
-						EtcdDataVolumeEphemeral: false,
-						EtcdTenancy:             "default",
 					}
 					actual := c.EtcdSettings
 					if !reflect.DeepEqual(expected, actual) {
@@ -680,6 +735,22 @@ etcd:
 								MemberIdentityProvider: "eni",
 								InternalDomainName:     "internal.example.com",
 							},
+							EC2Instance: model.EC2Instance{
+								Count:        1,
+								InstanceType: "t2.medium",
+								RootVolume: model.RootVolume{
+									Size: 30,
+									Type: "gp2",
+									IOPS: 0,
+								},
+								Tenancy: "default",
+							},
+							DataVolume: model.DataVolume{
+								Size:      30,
+								Type:      "gp2",
+								IOPS:      0,
+								Ephemeral: false,
+							},
 							Nodes: []model.EtcdNode{
 								model.EtcdNode{
 									Name: "etcd1a",
@@ -695,16 +766,6 @@ etcd:
 								subnet1,
 							},
 						},
-						EtcdCount:               1,
-						EtcdInstanceType:        "t2.medium",
-						EtcdRootVolumeSize:      30,
-						EtcdRootVolumeType:      "gp2",
-						EtcdRootVolumeIOPS:      0,
-						EtcdDataVolumeSize:      30,
-						EtcdDataVolumeType:      "gp2",
-						EtcdDataVolumeIOPS:      0,
-						EtcdDataVolumeEphemeral: false,
-						EtcdTenancy:             "default",
 					}
 					actual := c.EtcdSettings
 					if !reflect.DeepEqual(expected, actual) {
@@ -751,6 +812,22 @@ etcd:
 								MemberIdentityProvider: "eni",
 								InternalDomainName:     "internal.example.com",
 							},
+							EC2Instance: model.EC2Instance{
+								Count:        1,
+								InstanceType: "t2.medium",
+								RootVolume: model.RootVolume{
+									Size: 30,
+									Type: "gp2",
+									IOPS: 0,
+								},
+								Tenancy: "default",
+							},
+							DataVolume: model.DataVolume{
+								Size:      30,
+								Type:      "gp2",
+								IOPS:      0,
+								Ephemeral: false,
+							},
 							Nodes: []model.EtcdNode{
 								model.EtcdNode{
 									Name: "etcd1a",
@@ -766,16 +843,6 @@ etcd:
 								subnet1,
 							},
 						},
-						EtcdCount:               1,
-						EtcdInstanceType:        "t2.medium",
-						EtcdRootVolumeSize:      30,
-						EtcdRootVolumeType:      "gp2",
-						EtcdRootVolumeIOPS:      0,
-						EtcdDataVolumeSize:      30,
-						EtcdDataVolumeType:      "gp2",
-						EtcdDataVolumeIOPS:      0,
-						EtcdDataVolumeEphemeral: false,
-						EtcdTenancy:             "default",
 					}
 					actual := c.EtcdSettings
 					if !reflect.DeepEqual(expected, actual) {
@@ -822,6 +889,22 @@ etcd:
 								MemberIdentityProvider: "eni",
 								InternalDomainName:     "internal.example.com",
 							},
+							EC2Instance: model.EC2Instance{
+								Count:        1,
+								InstanceType: "t2.medium",
+								RootVolume: model.RootVolume{
+									Size: 30,
+									Type: "gp2",
+									IOPS: 0,
+								},
+								Tenancy: "default",
+							},
+							DataVolume: model.DataVolume{
+								Size:      30,
+								Type:      "gp2",
+								IOPS:      0,
+								Ephemeral: false,
+							},
 							Nodes: []model.EtcdNode{
 								model.EtcdNode{
 									Name: "etcd1a",
@@ -837,16 +920,6 @@ etcd:
 								subnet1,
 							},
 						},
-						EtcdCount:               1,
-						EtcdInstanceType:        "t2.medium",
-						EtcdRootVolumeSize:      30,
-						EtcdRootVolumeType:      "gp2",
-						EtcdRootVolumeIOPS:      0,
-						EtcdDataVolumeSize:      30,
-						EtcdDataVolumeType:      "gp2",
-						EtcdDataVolumeIOPS:      0,
-						EtcdDataVolumeEphemeral: false,
-						EtcdTenancy:             "default",
 					}
 					actual := c.EtcdSettings
 					if !reflect.DeepEqual(expected, actual) {
@@ -892,6 +965,8 @@ experimental:
   awsNodeLabels:
     enabled: true
   clusterAutoscalerSupport:
+    enabled: true
+  tlsBootstrap:
     enabled: true
   ephemeralImageStorage:
     enabled: true
@@ -956,6 +1031,9 @@ worker:
 							Enabled: true,
 						},
 						ClusterAutoscalerSupport: controlplane_config.ClusterAutoscalerSupport{
+							Enabled: true,
+						},
+						TLSBootstrap: controlplane_config.TLSBootstrap{
 							Enabled: true,
 						},
 						EphemeralImageStorage: controlplane_config.EphemeralImageStorage{
@@ -1029,6 +1107,8 @@ worker:
       enabled: true
     clusterAutoscalerSupport:
       enabled: true
+    tlsBootstrap:
+      enabled: true # Must be ignored, value is synced with the one from control plane
     ephemeralImageStorage:
       enabled: true
     kube2IamSupport:
@@ -1070,6 +1150,9 @@ worker:
 						},
 						ClusterAutoscalerSupport: controlplane_config.ClusterAutoscalerSupport{
 							Enabled: true,
+						},
+						TLSBootstrap: controlplane_config.TLSBootstrap{
+							Enabled: false,
 						},
 						EphemeralImageStorage: controlplane_config.EphemeralImageStorage{
 							Enabled:    true,
@@ -1256,13 +1339,13 @@ worker:
 				hasDefaultEtcdSettings,
 				hasDefaultExperimentalFeatures,
 				func(c *config.Config, t *testing.T) {
-					if *c.NodePools[0].Count != 1 {
+					if c.NodePools[0].Count != 1 {
 						t.Errorf("default worker count should be 1 but was: %d", c.NodePools[0].Count)
 					}
-					if *c.NodePools[1].Count != 2 {
+					if c.NodePools[1].Count != 2 {
 						t.Errorf("worker count should be set to 2 but was: %d", c.NodePools[1].Count)
 					}
-					if *c.NodePools[2].Count != 0 {
+					if c.NodePools[2].Count != 0 {
 						t.Errorf("worker count should be be set to 0 but was: %d", c.NodePools[2].Count)
 					}
 				},
@@ -1302,6 +1385,193 @@ worker:
 					}
 					if c.NodePools[2].MinCount() != 0 {
 						t.Errorf("worker min count should be 0 but was: %d", c.NodePools[2].MinCount())
+					}
+				},
+			},
+		},
+		{
+			context: "WithMultiAPIEndpoints",
+			configYaml: kubeAwsSettings.mainClusterYamlWithoutExternalDNS() + `
+vpcId: vpc-1a2b3c4d
+
+subnets:
+- name: privateSubnet1
+  availabilityZone: us-west-1a
+  instanceCIDR: "10.0.1.0/24"
+  private: true
+- name: privateSubnet2
+  availabilityZone: us-west-1b
+  instanceCIDR: "10.0.2.0/24"
+  private: true
+- name: publicSubnet1
+  availabilityZone: us-west-1a
+  instanceCIDR: "10.0.3.0/24"
+- name: publicSubnet2
+  availabilityZone: us-west-1b
+  instanceCIDR: "10.0.4.0/24"
+
+worker:
+  # cant be possibly "unversioned" one w/ existing elb because doing so would result in a worker kubelet has chances to
+  # connect to multiple masters from different clusters!
+  apiEndpointName: versionedPrivate
+  # btw apiEndpointName can be defaulted to a private/public managed(hence unstable/possibly versioned but not stable/unversioned)
+  # elb/round-robin if and only if there is only one. However we dont do the complex defaulting like that for now.
+
+adminAPIEndpointName: versionedPublic
+
+apiEndpoints:
+- name: unversionedPublic
+  dnsName: api.example.com
+  loadBalancer:
+    id: elb-internet-facing
+    ##you cant configure existing elb like below
+    #private: true
+    #subnets:
+    #- name: privateSubnet1
+    ##hostedZone must be omitted when elb id is specified.
+    ##in other words, it your responsibility to create an alias record for the elb
+    #hostedZone:
+    #  id: hostedzone-private
+- name: unversionedPrivate
+  dnsName: api.internal.example.com
+  loadBalancer:
+    id: elb-internal
+- name: versionedPublic
+  dnsName: v1api.example.com
+  loadBalancer:
+    subnets:
+    - name: publicSubnet1
+    hostedZone:
+      id: hostedzone-public
+- name: versionedPrivate
+  dnsName: v1api.internal.example.com
+  loadBalancer:
+    private: true
+    subnets:
+    - name: privateSubnet1
+    hostedZone:
+      id: hostedzone-private
+- name: versionedPublicAlt
+  dnsName: v1apialt.example.com
+  loadBalancer:
+    # "private: false" implies all the private subnets defined in the top-level "subnets"
+    #subnets:
+    #- name: publicSubnet1
+    #- name: publicSubnet2
+    hostedZone:
+      id: hostedzone-public
+- name: versionedPrivateAlt
+  dnsName: v1apialt.internal.example.com
+  loadBalancer:
+    private: true
+    # "private: true" implies all the private subnets defined in the top-level "subnets"
+    #subnets:
+    #- name: privateSubnet1
+    #- name: privateSubnet2
+    hostedZone:
+      id: hostedzone-private
+- name: addedToCertCommonNames
+  dnsName: api-alt.example.com
+`,
+			assertCluster: []ClusterTester{
+				func(rootCluster root.Cluster, t *testing.T) {
+					c := rootCluster.ControlPlane()
+
+					private1 := model.NewPrivateSubnet("us-west-1a", "10.0.1.0/24")
+					private1.Name = "privateSubnet1"
+
+					private2 := model.NewPrivateSubnet("us-west-1b", "10.0.2.0/24")
+					private2.Name = "privateSubnet2"
+
+					public1 := model.NewPublicSubnet("us-west-1a", "10.0.3.0/24")
+					public1.Name = "publicSubnet1"
+
+					public2 := model.NewPublicSubnet("us-west-1b", "10.0.4.0/24")
+					public2.Name = "publicSubnet2"
+
+					subnets := []model.Subnet{
+						private1,
+						private2,
+						public1,
+						public2,
+					}
+					if !reflect.DeepEqual(c.AllSubnets(), subnets) {
+						t.Errorf("Managed subnets didn't match: expected=%+v actual=%+v", subnets, c.AllSubnets())
+					}
+
+					publicSubnets := []model.Subnet{
+						public1,
+						public2,
+					}
+
+					privateSubnets := []model.Subnet{
+						private1,
+						private2,
+					}
+
+					unversionedPublic := c.APIEndpoints["unversionedPublic"]
+					unversionedPrivate := c.APIEndpoints["unversionedPrivate"]
+					versionedPublic := c.APIEndpoints["versionedPublic"]
+					versionedPrivate := c.APIEndpoints["versionedPrivate"]
+					versionedPublicAlt := c.APIEndpoints["versionedPublicAlt"]
+					versionedPrivateAlt := c.APIEndpoints["versionedPrivateAlt"]
+					addedToCertCommonNames := c.APIEndpoints["addedToCertCommonNames"]
+
+					if len(unversionedPublic.LoadBalancer.Subnets) != 0 {
+						t.Errorf("unversionedPublic: subnets shuold be empty but was not: actual=%+v", unversionedPublic.LoadBalancer.Subnets)
+					}
+					if !unversionedPublic.LoadBalancer.Enabled() {
+						t.Errorf("unversionedPublic: it should be enabled as the lb to which controller nodes are added, but it was not: loadBalancer=%+v", unversionedPublic.LoadBalancer)
+					}
+
+					if len(unversionedPrivate.LoadBalancer.Subnets) != 0 {
+						t.Errorf("unversionedPrivate: subnets shuold be empty but was not: actual=%+v", unversionedPrivate.LoadBalancer.Subnets)
+					}
+					if !unversionedPrivate.LoadBalancer.Enabled() {
+						t.Errorf("unversionedPrivate: it should be enabled as the lb to which controller nodes are added, but it was not: loadBalancer=%+v", unversionedPrivate.LoadBalancer)
+					}
+
+					if !reflect.DeepEqual(versionedPublic.LoadBalancer.Subnets, []model.Subnet{public1}) {
+						t.Errorf("versionedPublic: subnets didn't match: expected=%+v actual=%+v", []model.Subnet{public1}, versionedPublic.LoadBalancer.Subnets)
+					}
+					if !versionedPublic.LoadBalancer.Enabled() {
+						t.Errorf("versionedPublic: it should be enabled as the lb to which controller nodes are added, but it was not: loadBalancer=%+v", versionedPublic.LoadBalancer)
+					}
+
+					if !reflect.DeepEqual(versionedPrivate.LoadBalancer.Subnets, []model.Subnet{private1}) {
+						t.Errorf("versionedPrivate: subnets didn't match: expected=%+v actual=%+v", []model.Subnet{private1}, versionedPrivate.LoadBalancer.Subnets)
+					}
+					if !versionedPrivate.LoadBalancer.Enabled() {
+						t.Errorf("versionedPrivate: it should be enabled as the lb to which controller nodes are added, but it was not: loadBalancer=%+v", versionedPrivate.LoadBalancer)
+					}
+
+					if !reflect.DeepEqual(versionedPublicAlt.LoadBalancer.Subnets, publicSubnets) {
+						t.Errorf("versionedPublicAlt: subnets didn't match: expected=%+v actual=%+v", publicSubnets, versionedPublicAlt.LoadBalancer.Subnets)
+					}
+					if !versionedPublicAlt.LoadBalancer.Enabled() {
+						t.Errorf("versionedPublicAlt: it should be enabled as the lb to which controller nodes are added, but it was not: loadBalancer=%+v", versionedPublicAlt.LoadBalancer)
+					}
+
+					if !reflect.DeepEqual(versionedPrivateAlt.LoadBalancer.Subnets, privateSubnets) {
+						t.Errorf("versionedPrivateAlt: subnets didn't match: expected=%+v actual=%+v", privateSubnets, versionedPrivateAlt.LoadBalancer.Subnets)
+					}
+					if !versionedPrivateAlt.LoadBalancer.Enabled() {
+						t.Errorf("versionedPrivateAlt: it should be enabled as the lb to which controller nodes are added, but it was not: loadBalancer=%+v", versionedPrivateAlt.LoadBalancer)
+					}
+
+					if len(addedToCertCommonNames.LoadBalancer.Subnets) != 0 {
+						t.Errorf("addedToCertCommonNames: subnets shuold be empty but was not: actual=%+v", addedToCertCommonNames.LoadBalancer.Subnets)
+					}
+					if addedToCertCommonNames.LoadBalancer.Enabled() {
+						t.Errorf("addedToCertCommonNames: it should not be enabled as the lb to which controller nodes are added, but it was: loadBalancer=%+v", addedToCertCommonNames.LoadBalancer)
+					}
+
+					if !reflect.DeepEqual(c.ExternalDNSNames(), []string{"api-alt.example.com", "api.example.com", "api.internal.example.com", "v1api.example.com", "v1api.internal.example.com", "v1apialt.example.com", "v1apialt.internal.example.com"}) {
+						t.Errorf("unexpected external DNS names: %s", strings.Join(c.ExternalDNSNames(), ", "))
+					}
+
+					if !reflect.DeepEqual(c.APIEndpoints.ManagedELBLogicalNames(), []string{"APIEndpointVersionedPrivateAltELB", "APIEndpointVersionedPrivateELB", "APIEndpointVersionedPublicAltELB", "APIEndpointVersionedPublicELB"}) {
+						t.Errorf("unexpected managed ELB logical names: %s", strings.Join(c.APIEndpoints.ManagedELBLogicalNames(), ", "))
 					}
 				},
 			},
@@ -2147,7 +2417,8 @@ worker:
         instanceType: c4.large
       - weightedCapacity: 2
         instanceType: c4.xlarge
-        rootVolumeSize: 100
+        rootVolume:
+          size: 100
 `,
 			assertConfig: []ConfigTester{
 				hasDefaultExperimentalFeatures,
@@ -2243,7 +2514,8 @@ worker:
         instanceType: c4.large
       - weightedCapacity: 2
         instanceType: c4.xlarge
-        rootVolumeIOPS: 500
+        rootVolume:
+          iops: 500
 `,
 			assertConfig: []ConfigTester{
 				hasDefaultExperimentalFeatures,
@@ -2305,16 +2577,24 @@ routeTableId: rtb-1a2b3c4d
 					}
 					expected := controlplane_config.EtcdSettings{
 						Etcd: model.Etcd{
+							EC2Instance: model.EC2Instance{
+								Count:        1,
+								InstanceType: "t2.medium",
+								RootVolume: model.RootVolume{
+									Size: 30,
+									Type: "gp2",
+									IOPS: 0,
+								},
+								Tenancy: "default",
+							},
+							DataVolume: model.DataVolume{
+								Size:      30,
+								Type:      "gp2",
+								IOPS:      0,
+								Ephemeral: false,
+							},
 							Subnets: subnets,
 						},
-						EtcdCount:               1,
-						EtcdInstanceType:        "t2.medium",
-						EtcdRootVolumeSize:      30,
-						EtcdRootVolumeType:      "gp2",
-						EtcdDataVolumeSize:      30,
-						EtcdDataVolumeType:      "gp2",
-						EtcdDataVolumeEphemeral: false,
-						EtcdTenancy:             "default",
 					}
 					actual := c.EtcdSettings
 					if !reflect.DeepEqual(expected, actual) {
@@ -2469,66 +2749,180 @@ worker:
 			context: "WithDedicatedInstanceTenancy",
 			configYaml: minimalValidConfigYaml + `
 workerTenancy: dedicated
-controllerTenancy: dedicated
-etcdTenancy: dedicated
+controller:
+  tenancy: dedicated
+etcd:
+  tenancy: dedicated
 `,
 			assertConfig: []ConfigTester{
 				func(c *config.Config, t *testing.T) {
-					if c.EtcdSettings.EtcdTenancy != "dedicated" {
-						t.Errorf("EtcdSettings.EtcdTenancy didn't match: expected=dedicated actual=%s", c.EtcdSettings.EtcdTenancy)
+					if c.Etcd.Tenancy != "dedicated" {
+						t.Errorf("Etcd.Tenancy didn't match: expected=dedicated actual=%s", c.Etcd.Tenancy)
 					}
 					if c.WorkerTenancy != "dedicated" {
 						t.Errorf("WorkerTenancy didn't match: expected=dedicated actual=%s", c.WorkerTenancy)
 					}
-					if c.ControllerTenancy != "dedicated" {
-						t.Errorf("ControllerTenancy didn't match: expected=dedicated actual=%s", c.ControllerTenancy)
+					if c.Controller.Tenancy != "dedicated" {
+						t.Errorf("Controller.Tenancy didn't match: expected=dedicated actual=%s", c.Controller.Tenancy)
 					}
 				},
 			},
 		},
 		{
-			context: "WithEtcdNodesWithCustomEBSVolumes",
+			context: "WithControllerNodesWithLegacyKeys",
+			configYaml: minimalValidConfigYaml + `
+vpcId: vpc-1a2b3c4d
+routeTableId: rtb-1a2b3c4d
+controllerCount: 2
+controllerCreateTimeout: PT10M
+controllerInstanceType: t2.large
+controllerRootVolumeSize: 101
+controllerRootVolumeType: io1
+controllerRootVolumeIOPS: 102
+controllerTenancy: dedicated
+`,
+			assertConfig: []ConfigTester{
+				hasDefaultExperimentalFeatures,
+				func(c *config.Config, t *testing.T) {
+					expected := model.EC2Instance{
+						Count:         2,
+						InstanceType:  "t2.large",
+						CreateTimeout: "PT10M",
+						RootVolume: model.RootVolume{
+							Size: 101,
+							Type: "io1",
+							IOPS: 102,
+						},
+						Tenancy: "dedicated",
+					}
+
+					actual := c.Controller.EC2Instance
+					if !reflect.DeepEqual(expected, actual) {
+						t.Errorf(
+							"Controller didn't match: expected=%v actual=%v",
+							expected,
+							actual,
+						)
+					}
+
+					if c.ControllerInstanceType() != "t2.large" {
+						t.Errorf("unexpected controller instance type: expected=t2.large, actual=%s", c.ControllerInstanceType())
+					}
+					if c.ControllerCreateTimeout() != "PT10M" {
+						t.Errorf("unexpected controller create timeout: expected=PT10M, actual=%s", c.ControllerCreateTimeout())
+					}
+					if c.ControllerCount() != 2 {
+						t.Errorf("unexpected controller count: expected=2, actual=%d", c.ControllerCount())
+					}
+					if c.ControllerRootVolumeSize() != 101 {
+						t.Errorf("unexpected controller root volume size: expected=101, actual=%d", c.ControllerRootVolumeSize())
+					}
+					if c.ControllerRootVolumeType() != "io1" {
+						t.Errorf("unexpected controller root volume type: expected=io1, actual=%s", c.ControllerRootVolumeType())
+					}
+					if c.ControllerRootVolumeIOPS() != 102 {
+						t.Errorf("unexpected controller root volume iops: expected=102, actual=%d", c.ControllerRootVolumeIOPS())
+					}
+					if c.ControllerTenancy() != "dedicated" {
+						t.Errorf("unexpected controller tenancy: expected=dedicated, actual=%s", c.ControllerTenancy())
+					}
+				},
+			},
+		},
+		{
+			context: "WithEtcdNodesWithLegacyKeys",
 			configYaml: minimalValidConfigYaml + `
 vpcId: vpc-1a2b3c4d
 routeTableId: rtb-1a2b3c4d
 etcdCount: 2
+etcdTenancy: dedicated
+etcdInstanceType: t2.large
 etcdRootVolumeSize: 101
 etcdRootVolumeType: io1
 etcdRootVolumeIOPS: 102
 etcdDataVolumeSize: 103
 etcdDataVolumeType: io1
 etcdDataVolumeIOPS: 104
+etcdDataVolumeEncrypted: true
 `,
 			assertConfig: []ConfigTester{
 				hasDefaultExperimentalFeatures,
 				func(c *config.Config, t *testing.T) {
+					//intp := func(v int) *int {
+					//	return &v
+					//}
+					//boolp := func(v bool) *bool {
+					//	return &v
+					//}
+					//strp := func(v string) *string {
+					//	return &v
+					//}
 					subnet1 := model.NewPublicSubnetWithPreconfiguredRouteTable("us-west-1c", "10.0.0.0/24", "rtb-1a2b3c4d")
 					subnet1.Name = "Subnet0"
 					subnets := []model.Subnet{
 						subnet1,
 					}
-					expected := controlplane_config.EtcdSettings{
-						Etcd: model.Etcd{
-							Subnets: subnets,
+					expected := model.Etcd{
+						EC2Instance: model.EC2Instance{
+							Count:        2,
+							InstanceType: "t2.large",
+							RootVolume: model.RootVolume{
+								Size: 101,
+								Type: "io1",
+								IOPS: 102,
+							},
+							Tenancy: "dedicated",
 						},
-						EtcdCount:               2,
-						EtcdInstanceType:        "t2.medium",
-						EtcdRootVolumeSize:      101,
-						EtcdRootVolumeType:      "io1",
-						EtcdRootVolumeIOPS:      102,
-						EtcdDataVolumeSize:      103,
-						EtcdDataVolumeType:      "io1",
-						EtcdDataVolumeIOPS:      104,
-						EtcdDataVolumeEphemeral: false,
-						EtcdTenancy:             "default",
+						DataVolume: model.DataVolume{
+							Size:      103,
+							Type:      "io1",
+							IOPS:      104,
+							Ephemeral: false,
+							Encrypted: true,
+						},
+						Subnets: subnets,
 					}
-					actual := c.EtcdSettings
+
+					actual := c.EtcdSettings.Etcd
 					if !reflect.DeepEqual(expected, actual) {
 						t.Errorf(
 							"EtcdSettings didn't match: expected=%v actual=%v",
 							expected,
 							actual,
 						)
+					}
+					if c.EtcdInstanceType() != "t2.large" {
+						t.Errorf("unexpected etcd instance type: expected=t2.large, actual=%s", c.EtcdInstanceType())
+					}
+					//if c.EtcdCreateTimeout() != "PT10M" {
+					//	t.Errorf("unexpected etcd create timeout: expected=PT10M, actual=%s", c.EtcdCreateTimeout())
+					//}
+					if c.EtcdCount() != 2 {
+						t.Errorf("unexpected etcd count: expected=2, actual=%d", c.EtcdCount())
+					}
+					if c.EtcdRootVolumeSize() != 101 {
+						t.Errorf("unexpected etcd root volume size: expected=101, actual=%d", c.EtcdRootVolumeSize())
+					}
+					if c.EtcdRootVolumeType() != "io1" {
+						t.Errorf("unexpected etcd root volume type: expected=io1, actual=%s", c.EtcdRootVolumeType())
+					}
+					if c.EtcdRootVolumeIOPS() != 102 {
+						t.Errorf("unexpected etcd root volume iops: expected=102, actual=%d", c.EtcdRootVolumeIOPS())
+					}
+					if c.EtcdDataVolumeSize() != 103 {
+						t.Errorf("unexpected etcd data volume size: expected=103, actual=%d", c.EtcdDataVolumeSize())
+					}
+					if c.EtcdDataVolumeType() != "io1" {
+						t.Errorf("unexpected etcd data volume type: expected=io1, actual=%s", c.EtcdDataVolumeType())
+					}
+					if c.EtcdDataVolumeIOPS() != 104 {
+						t.Errorf("unexpected etcd data volume iops: expected=104, actual=%d", c.EtcdDataVolumeIOPS())
+					}
+					if !c.EtcdDataVolumeEncrypted() {
+						t.Errorf("unexpected etcd data volume encrypted: expected=true, actual=%v", c.EtcdDataVolumeEncrypted())
+					}
+					if c.EtcdTenancy() != "dedicated" {
+						t.Errorf("unexpected etcd tenancy: expected=dedicated, actual=%s", c.EtcdTenancy())
 					}
 				},
 			},
@@ -2629,6 +3023,42 @@ controller:
 			expectedErrorMessage: "clusterName(=my.cluster) is malformed. It must consist only of alphanumeric characters, colons, or hyphens",
 		},
 		{
+			context: "WithEtcdAutomatedDisasterRecoveryRequiresAutomatedSnapshot",
+			configYaml: minimalValidConfigYaml + `
+etcd:
+  version: 3
+  snapshot:
+    automated: false
+  disasterRecovery:
+    automated: true
+`,
+			expectedErrorMessage: "`etcd.disasterRecovery.automated` is set to true but `etcd.snapshot.automated` is not - automated disaster recovery requires snapshot to be also automated",
+		},
+		{
+			context: "WithEtcdAutomatedDisasterRecoveryDoesntSupportEtcd2",
+			configYaml: minimalValidConfigYaml + `
+etcd:
+  version: 2
+  snapshot:
+    automated: true
+  disasterRecovery:
+    automated: false
+`,
+			expectedErrorMessage: "`etcd.snapshot.automated` is set to true for enabling automated snapshot. However the feature is available only for etcd version 3",
+		},
+		{
+			context: "WithEtcdAutomatedSnapshotDoesntSupportEtcd2",
+			configYaml: minimalValidConfigYaml + `
+etcd:
+  version: 2
+  snapshot:
+    automated: false
+  disasterRecovery:
+    automated: true
+`,
+			expectedErrorMessage: "`etcd.disasterRecovery.automated` is set to true for enabling automated disaster recovery. However the feature is available only for etcd version 3",
+		},
+		{
 			context: "WithInvalidTaint",
 			configYaml: minimalValidConfigYaml + `
 worker:
@@ -2645,7 +3075,7 @@ worker:
 			context: "WithAwsNodeLabelEnabledForTooLongClusterNameAndPoolName",
 			configYaml: minimalValidConfigYaml + `
 # clusterName + nodePools[].name should be less than or equal to 25 characters or the launch configuration name
-# "mykubeawsclustername-mynestedstackname-1N2C4K3LLBEDZ-ControllersLC-BC2S9P3JG2QD" exceeds the limit of 63 characters
+# "mykubeawsclustername-mynestedstackname-1N2C4K3LLBEDZ-WorkersLC-BC2S9P3JG2QD" exceeds the limit of 63 characters
 # See https://kubernetes.io/docs/user-guide/labels/#syntax-and-character-set
 clusterName: my-cluster1 # 11 characters
 worker:
@@ -2662,12 +3092,264 @@ worker:
 # clusterName should be less than or equal to 21 characters or the launch configuration name
 # "mykubeawsclustername-mynestedstackname-1N2C4K3LLBEDZ-ControllersLC-BC2S9P3JG2QD" exceeds the limit of 63 characters
 # See https://kubernetes.io/docs/user-guide/labels/#syntax-and-character-set
-clusterName: my-long-long-cluster-1 # 22 characters
+clusterName: mycluster # 9
 experimental:
   awsNodeLabels:
      enabled: true
 `,
-			expectedErrorMessage: "awsNodeLabels can't be enabled for controllers because the total number of characters in clusterName(=\"my-long-long-cluster-1\") exceeds the limit of 21",
+			expectedErrorMessage: "awsNodeLabels can't be enabled for controllers because the total number of characters in clusterName(=\"mycluster\") exceeds the limit of 8",
+		},
+		{
+			context: "WithMultiAPIEndpointsInvalidLB",
+			configYaml: kubeAwsSettings.mainClusterYamlWithoutExternalDNS() + `
+vpcId: vpc-1a2b3c4d
+
+subnets:
+- name: publicSubnet1
+  availabilityZone: us-west-1a
+  instanceCIDR: "10.0.1.0/24"
+
+worker:
+  apiEndpointName: unversionedPublic
+
+apiEndpoints:
+- name: unversionedPublic
+  dnsName: api.example.com
+  loadBalancer:
+    id: elb-internet-facing
+    private: true
+    subnets:
+    - name: publicSubnet1
+    hostedZone:
+      id: hostedzone-public
+`,
+			expectedErrorMessage: "invalid apiEndpoint \"unversionedPublic\" at index 0: invalid loadBalancer: createRecordSet, private, subnets, hostedZone must be omitted when id is specified to reuse an existing ELB",
+		},
+		{
+			context: "WithMultiAPIEndpointsInvalidWorkerAPIEndpointName",
+			configYaml: kubeAwsSettings.mainClusterYamlWithoutExternalDNS() + `
+vpcId: vpc-1a2b3c4d
+
+subnets:
+- name: publicSubnet1
+  availabilityZone: us-west-1a
+  instanceCIDR: "10.0.1.0/24"
+
+worker:
+  # no api endpoint named like that exists!
+  apiEndpointName: unknownEndpoint
+
+adminAPIEndpointName: versionedPublic
+
+apiEndpoints:
+- name: unversionedPublic
+  dnsName: api.example.com
+  loadBalancer:
+    subnets:
+    - name: publicSubnet1
+    hostedZone:
+      id: hostedzone-public
+- name: versionedPublic
+  dnsName: apiv1.example.com
+  loadBalancer:
+    subnets:
+    - name: publicSubnet1
+    hostedZone:
+      id: hostedzone-public
+`,
+			expectedErrorMessage: "invalid value for worker.apiEndpointName: no API endpoint named \"unknownEndpoint\" found",
+		},
+		{
+			context: "WithMultiAPIEndpointsInvalidWorkerNodePoolAPIEndpointName",
+			configYaml: kubeAwsSettings.mainClusterYamlWithoutExternalDNS() + `
+vpcId: vpc-1a2b3c4d
+
+subnets:
+- name: publicSubnet1
+  availabilityZone: us-west-1a
+  instanceCIDR: "10.0.1.0/24"
+
+worker:
+  # this one is ok but...
+  apiEndpointName: versionedPublic
+  nodePools:
+  - name: pool1
+    # this one is ng; no api endpoint named this exists!
+    apiEndpointName: unknownEndpoint
+
+adminAPIEndpointName: versionedPublic
+
+apiEndpoints:
+- name: unversionedPublic
+  dnsName: api.example.com
+  loadBalancer:
+    subnets:
+    - name: publicSubnet1
+    hostedZone:
+      id: hostedzone-public
+- name: versionedPublic
+  dnsName: apiv1.example.com
+  loadBalancer:
+    subnets:
+    - name: publicSubnet1
+    hostedZone:
+      id: hostedzone-public
+`,
+			expectedErrorMessage: "invalid node pool at index 0: failed to find an API endpoint named \"unknownEndpoint\": no API endpoint named \"unknownEndpoint\" defined under the `apiEndpoints[]`",
+		},
+		{
+			context: "WithMultiAPIEndpointsMissingDNSName",
+			configYaml: kubeAwsSettings.mainClusterYamlWithoutExternalDNS() + `
+vpcId: vpc-1a2b3c4d
+
+subnets:
+- name: publicSubnet1
+  availabilityZone: us-west-1a
+  instanceCIDR: "10.0.1.0/24"
+
+apiEndpoints:
+- name: unversionedPublic
+  dnsName:
+`,
+			expectedErrorMessage: "invalid apiEndpoint \"unversionedPublic\" at index 0: dnsName must be set",
+		},
+		{
+			context: "WithMultiAPIEndpointsMissingGlobalAPIEndpointName",
+			configYaml: kubeAwsSettings.mainClusterYamlWithoutExternalDNS() + `
+vpcId: vpc-1a2b3c4d
+
+subnets:
+- name: publicSubnet1
+  availabilityZone: us-west-1a
+  instanceCIDR: "10.0.1.0/24"
+
+worker:
+  nodePools:
+  - name: pool1
+    # this one is ng; no api endpoint named this exists!
+    apiEndpointName: unknownEndpoint
+  - name: pool1
+    # this one is ng; missing apiEndpointName
+
+adminAPIEndpointName: versionedPublic
+
+apiEndpoints:
+- name: unversionedPublic
+  dnsName: api.example.com
+  loadBalancer:
+    subnets:
+    - name: publicSubnet1
+    hostedZone:
+      id: hostedzone-public
+- name: versionedPublic
+  dnsName: apiv1.example.com
+  loadBalancer:
+    subnets:
+    - name: publicSubnet1
+    hostedZone:
+      id: hostedzone-public
+`,
+			expectedErrorMessage: "worker.apiEndpointName must not be empty when there're 2 or more API endpoints under the key `apiEndpoints` and one of worker.nodePools[] are missing apiEndpointName",
+		},
+		{
+			context: "WithMultiAPIEndpointsRecordSetImpliedBySubnetsMissingHostedZoneID",
+			configYaml: kubeAwsSettings.mainClusterYamlWithoutExternalDNS() + `
+vpcId: vpc-1a2b3c4d
+
+subnets:
+- name: publicSubnet1
+  availabilityZone: us-west-1a
+  instanceCIDR: "10.0.1.0/24"
+
+worker:
+  apiEndpointName: unversionedPublic
+
+apiEndpoints:
+- name: unversionedPublic
+  dnsName: api.example.com
+  loadBalancer:
+    # an internet-facing(which is the default) lb in the public subnet is going to be created with a corresponding record set
+    # however no hosted zone for the record set is provided!
+    subnets:
+    - name: publicSubnet1
+    # missing hosted zone id here!
+`,
+			expectedErrorMessage: "invalid apiEndpoint \"unversionedPublic\" at index 0: invalid loadBalancer: missing hostedZoneId",
+		},
+		{
+			context: "WithMultiAPIEndpointsRecordSetImpliedByExplicitPublicMissingHostedZoneID",
+			configYaml: kubeAwsSettings.mainClusterYamlWithoutExternalDNS() + `
+vpcId: vpc-1a2b3c4d
+
+subnets:
+- name: publicSubnet1
+  availabilityZone: us-west-1a
+  instanceCIDR: "10.0.1.0/24"
+
+worker:
+  apiEndpointName: unversionedPublic
+
+apiEndpoints:
+- name: unversionedPublic
+  dnsName: api.example.com
+  loadBalancer:
+    # an internet-facing lb is going to be created with a corresponding record set
+    # however no hosted zone for the record set is provided!
+    private: false
+    # missing hosted zone id here!
+`,
+			expectedErrorMessage: "invalid apiEndpoint \"unversionedPublic\" at index 0: invalid loadBalancer: missing hostedZoneId",
+		},
+		{
+			context: "WithMultiAPIEndpointsRecordSetImpliedByExplicitPrivateMissingHostedZoneID",
+			configYaml: kubeAwsSettings.mainClusterYamlWithoutExternalDNS() + `
+vpcId: vpc-1a2b3c4d
+
+subnets:
+- name: publicSubnet1
+  availabilityZone: us-west-1a
+  instanceCIDR: "10.0.1.0/24"
+- name: privateSubnet1
+  availabilityZone: us-west-1a
+  instanceCIDR: "10.0.2.0/24"
+
+worker:
+  apiEndpointName: unversionedPublic
+
+apiEndpoints:
+- name: unversionedPublic
+  dnsName: api.example.com
+  loadBalancer:
+    # an internal lb is going to be created with a corresponding record set
+    # however no hosted zone for the record set is provided!
+    private: true
+    # missing hosted zone id here!
+`,
+			expectedErrorMessage: "invalid apiEndpoint \"unversionedPublic\" at index 0: invalid loadBalancer: missing hostedZoneId",
+		},
+		{
+			context: "WithMultiAPIEndpointsExplicitRecordSetMissingHostedZoneID",
+			configYaml: kubeAwsSettings.mainClusterYamlWithoutExternalDNS() + `
+vpcId: vpc-1a2b3c4d
+
+subnets:
+- name: publicSubnet1
+  availabilityZone: us-west-1a
+  instanceCIDR: "10.0.1.0/24"
+
+worker:
+  apiEndpointName: unversionedPublic
+
+apiEndpoints:
+- name: unversionedPublic
+  dnsName: api.example.com
+  loadBalancer:
+    # lb is going to be created with a corresponding record set
+    # however no hosted zone for the record set is provided!
+    createRecordSet: true
+    # missing hosted zone id here!
+`,
+			expectedErrorMessage: "invalid apiEndpoint \"unversionedPublic\" at index 0: invalid loadBalancer: missing hostedZoneId",
 		},
 		{
 			context: "WithNonZeroWorkerCount",
@@ -2817,6 +3499,23 @@ worker:
       baz: 1
 `,
 			expectedErrorMessage: "unknown keys found in worker.nodePools[0].clusterAutoscaler: baz",
+		},
+		{
+			context: "WithUnknownKeyInAddons",
+			configYaml: minimalValidConfigYaml + `
+addons:
+  blah: 5
+`,
+			expectedErrorMessage: "unknown keys found in addons: blah",
+		},
+		{
+			context: "WithUnknownKeyInReschedulerAddon",
+			configYaml: minimalValidConfigYaml + `
+addons:
+  rescheduler:
+    foo: yeah
+`,
+			expectedErrorMessage: "unknown keys found in addons.rescheduler: foo",
 		},
 		{
 			context: "WithTooLongControllerIAMRoleName",

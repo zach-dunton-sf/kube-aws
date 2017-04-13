@@ -6,12 +6,14 @@
   "export COREOS_PRIVATE_IPV4 COREOS_PRIVATE_IPV6 COREOS_PUBLIC_IPV4 COREOS_PUBLIC_IPV6",
   "REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r '.region')",
   "USERDATA_FILE={{.UserDataWorkerFileName}}",
-  "/usr/bin/rkt run \\",
+  "while ! /usr/bin/rkt run \\",
   "   --net=host \\",
   "   --volume=dns,kind=host,source=/etc/resolv.conf,readOnly=true --mount volume=dns,target=/etc/resolv.conf  \\",
   "   --volume=awsenv,kind=host,source=/var/run/coreos,readOnly=false --mount volume=awsenv,target=/var/run/coreos \\",
   "   --trust-keys-from-https \\",
-  "   {{.AWSCliImage.Options}}{{.AWSCliImage.RktRepo}} --exec=aws -- s3 --region $REGION  cp {{ .UserDataWorkerS3URI }} /var/run/coreos/$USERDATA_FILE",
+  "   {{.AWSCliImage.Options}}{{.AWSCliImage.RktRepo}} --exec=aws -- s3 --region $REGION  cp {{ .UserDataWorkerS3URI }} /var/run/coreos/$USERDATA_FILE; do",
+  "sleep 1",
+  "done",
   "exec /usr/bin/coreos-cloudinit --from-file /var/run/coreos/$USERDATA_FILE"
 ]]}}
 {{end}}
@@ -85,11 +87,11 @@
               {
                 "DeviceName": "/dev/xvda",
                 "Ebs": {
-                  "VolumeSize": "{{$spec.RootVolumeSize}}",
-                  {{if gt $spec.RootVolumeIOPS 0}}
-                  "Iops": "{{$spec.RootVolumeIOPS}}",
+                  "VolumeSize": "{{$spec.RootVolume.Size}}",
+                  {{if gt $spec.RootVolume.IOPS 0}}
+                  "Iops": "{{$spec.RootVolume.IOPS}}",
                   {{end}}
-                  "VolumeType": "{{$spec.RootVolumeType}}"
+                  "VolumeType": "{{$spec.RootVolume.Type}}"
                 }
               }{{range $volumeMountSpecIndex, $volumeMountSpec := $.VolumeMounts}},
               {
@@ -212,11 +214,11 @@
           {
             "DeviceName": "/dev/xvda",
             "Ebs": {
-              "VolumeSize": "{{.RootVolumeSize}}",
-              {{if gt .RootVolumeIOPS 0}}
-              "Iops": "{{.RootVolumeIOPS}}",
+              "VolumeSize": "{{.RootVolume.Size}}",
+              {{if gt .RootVolume.IOPS 0}}
+              "Iops": "{{.RootVolume.IOPS}}",
               {{end}}
-              "VolumeType": "{{.RootVolumeType}}"
+              "VolumeType": "{{.RootVolume.Type}}"
             }
           }{{range $volumeMountSpecIndex, $volumeMountSpec := .VolumeMounts}},
           {
@@ -327,6 +329,15 @@
                   ],
                   "Resource": "arn:{{.Region.Partition}}:s3:::{{$.UserDataWorkerS3Prefix}}*"
                 },
+                {{ if .KubeResourcesAutosave.Enabled }}
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject"
+                  ],
+                  "Resource": "arn:{{.Region.Partition}}:s3:::{{ .KubeResourcesAutosave.S3Path }}/*"
+                },
+                {{end}}
                 {{if .Kube2IamSupport.Enabled }}
                 {
                   "Action": "sts:AssumeRole",

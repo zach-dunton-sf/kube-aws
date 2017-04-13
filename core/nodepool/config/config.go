@@ -24,20 +24,25 @@ type Ref struct {
 
 type ComputedConfig struct {
 	ProvidedConfig
+
 	// Fields computed from Cluster
-	AMI       string
-	TLSConfig *cfg.CompactTLSAssets
+	AMI string
+
+	TLSConfig        *cfg.CompactTLSAssets
+	AuthTokensConfig *cfg.CompactAuthTokens
 }
 
 type ProvidedConfig struct {
 	MainClusterSettings
+	// APIEndpoint is the k8s api endpoint to which worker nodes in this node pool communicate
+	APIEndpoint             derived.APIEndpoint
 	cfg.KubeClusterSettings `yaml:",inline"`
 	WorkerNodePoolConfig    `yaml:",inline"`
 	DeploymentSettings      `yaml:",inline"`
 	cfg.Experimental        `yaml:",inline"`
 	Private                 bool   `yaml:"private,omitempty"`
 	NodePoolName            string `yaml:"name,omitempty"`
-	providedEncryptService  cfg.EncryptService
+	ProvidedEncryptService  cfg.EncryptService
 }
 
 type DeploymentSettings struct {
@@ -45,7 +50,8 @@ type DeploymentSettings struct {
 }
 
 type MainClusterSettings struct {
-	EtcdNodes []derived.EtcdNode
+	EtcdNodes             []derived.EtcdNode
+	KubeResourcesAutosave cfg.KubeResourcesAutosave
 }
 
 type StackTemplateOptions struct {
@@ -74,17 +80,35 @@ func (c ProvidedConfig) StackConfig(opts StackTemplateOptions) (*StackConfig, er
 
 	if stackConfig.ManageCertificates {
 		if stackConfig.ComputedConfig.AssetsEncryptionEnabled() {
-			compactAssets, _ := cfg.ReadOrCreateCompactTLSAssets(opts.AssetsDir, cfg.KMSConfig{
+			compactAssets, err := cfg.ReadOrCreateCompactTLSAssets(opts.AssetsDir, cfg.KMSConfig{
 				Region:         stackConfig.ComputedConfig.Region,
 				KMSKeyARN:      c.KMSKeyARN,
-				EncryptService: c.providedEncryptService,
+				EncryptService: c.ProvidedEncryptService,
 			})
-
+			if err != nil {
+				return nil, err
+			}
 			stackConfig.ComputedConfig.TLSConfig = compactAssets
 		} else {
-			rawAssets, _ := cfg.ReadOrCreateUnecryptedCompactTLSAssets(opts.AssetsDir)
+			rawAssets, _ := cfg.ReadOrCreateUnencryptedCompactTLSAssets(opts.AssetsDir)
 			stackConfig.ComputedConfig.TLSConfig = rawAssets
 		}
+	}
+
+	if c.DeploymentSettings.Experimental.TLSBootstrap.Enabled {
+		if stackConfig.ComputedConfig.AssetsEncryptionEnabled() {
+			compactAuthTokens, _ := cfg.ReadOrCreateCompactAuthTokens(opts.AssetsDir, cfg.KMSConfig{
+				Region:         stackConfig.ComputedConfig.Region,
+				KMSKeyARN:      c.KMSKeyARN,
+				EncryptService: c.ProvidedEncryptService,
+			})
+			stackConfig.ComputedConfig.AuthTokensConfig = compactAuthTokens
+		} else {
+			rawAuthTokens, _ := cfg.ReadOrCreateUnencryptedCompactAuthTokens(opts.AssetsDir)
+			stackConfig.ComputedConfig.AuthTokensConfig = rawAuthTokens
+		}
+	} else {
+		stackConfig.ComputedConfig.AuthTokensConfig = &cfg.CompactAuthTokens{}
 	}
 
 	if stackConfig.UserDataWorker, err = userdatatemplate.GetString(opts.WorkerTmplFile, stackConfig.ComputedConfig); err != nil {
@@ -95,6 +119,7 @@ func (c ProvidedConfig) StackConfig(opts StackTemplateOptions) (*StackConfig, er
 
 	baseS3URI := strings.TrimSuffix(opts.S3URI, "/")
 	stackConfig.S3URI = fmt.Sprintf("%s/kube-aws/clusters/%s/exported/stacks", baseS3URI, c.ClusterName)
+	stackConfig.KubeResourcesAutosave.S3Path = fmt.Sprintf("%s/kube-aws/clusters/%s/backup", strings.TrimPrefix(baseS3URI, "s3://"), c.ClusterName)
 
 	if opts.SkipWait {
 		enabled := false
@@ -106,7 +131,7 @@ func (c ProvidedConfig) StackConfig(opts StackTemplateOptions) (*StackConfig, er
 
 func newDefaultCluster() *ProvidedConfig {
 	return &ProvidedConfig{
-		WorkerNodePoolConfig: NewWorkerNodePoolConfig(),
+		WorkerNodePoolConfig: newWorkerNodePoolConfig(),
 	}
 }
 
@@ -128,22 +153,50 @@ func ClusterFromBytes(data []byte, main *cfg.Config) (*ProvidedConfig, error) {
 	return c, nil
 }
 
-func (c *ProvidedConfig) Load(main *cfg.Config) error {
-	defaults := newDefaultCluster()
-	if c.Count == nil {
-		c.Count = defaults.Count
+func (c *ProvidedConfig) ExternalDNSName() string {
+	fmt.Println("WARN: ExternalDNSName is deprecated and will be removed in v0.9.7. Please use APIEndpoint.Name instead")
+	return c.APIEndpoint.DNSName
+}
+
+func (c *ProvidedConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type t ProvidedConfig
+	work := t(*newDefaultCluster())
+	if err := unmarshal(&work); err != nil {
+		return fmt.Errorf("failed to parse node pool config: %v", err)
 	}
+	*c = ProvidedConfig(work)
+
+	// TODO Remove deprecated keys in v0.9.7
+	if c.DeprecatedRootVolumeIOPS != nil {
+		fmt.Println("WARN: worker.nodePools[].rootVolumeIOPS is deprecated and will be removed in v0.9.7. Please use worker.nodePools[].rootVolume.iops instead")
+		c.RootVolume.IOPS = *c.DeprecatedRootVolumeIOPS
+	}
+	if c.DeprecatedRootVolumeSize != nil {
+		fmt.Println("WARN: worker.nodePools[].rootVolumeSize is deprecated and will be removed in v0.9.7. Please use worker.nodePools[].rootVolume.size instead")
+		c.RootVolume.Size = *c.DeprecatedRootVolumeSize
+	}
+	if c.DeprecatedRootVolumeType != nil {
+		fmt.Println("WARN: worker.nodePools[].rootVolumeType is deprecated and will be removed in v0.9.7. Please use worker.nodePools[].rootVolume.type instead")
+		c.RootVolume.Type = *c.DeprecatedRootVolumeType
+	}
+
+	return nil
+}
+
+func (c *ProvidedConfig) Load(main *cfg.Config) error {
 	if c.SpotFleet.Enabled() {
 		enabled := false
 		c.WaitSignal.EnabledOverride = &enabled
 	}
 
 	c.WorkerNodePoolConfig = c.WorkerNodePoolConfig.WithDefaultsFrom(main.DefaultWorkerSettings)
-	c.NodePoolConfig.SpotFleet = c.NodePoolConfig.SpotFleet.WithDefaults()
 	c.DeploymentSettings = c.DeploymentSettings.WithDefaultsFrom(main.DeploymentSettings)
 
 	// Inherit parameters from the control plane stack
 	c.KubeClusterSettings = main.KubeClusterSettings
+
+	// Inherit cluster TLS bootstrap config from control plane stack
+	c.Experimental.TLSBootstrap = main.DeploymentSettings.Experimental.TLSBootstrap
 
 	// Validate whole the inputs including inherited ones
 	if err := c.valid(); err != nil {
@@ -186,6 +239,29 @@ define one or more public subnets in cluster.yaml or explicitly reference privat
 	}
 
 	c.EtcdNodes = main.EtcdNodes
+	c.KubeResourcesAutosave = main.KubeResourcesAutosave
+
+	var apiEndpoint derived.APIEndpoint
+	if c.APIEndpointName != "" {
+		found, err := main.APIEndpoints.FindByName(c.APIEndpointName)
+		if err != nil {
+			return fmt.Errorf("failed to find an API endpoint named \"%s\": %v", c.APIEndpointName, err)
+		}
+		apiEndpoint = *found
+	} else {
+		if len(main.APIEndpoints) > 1 {
+			return errors.New("worker.nodePools[].apiEndpointName must not be empty when there's 2 or more api endpoints under the key `apiEndpoints")
+		}
+		apiEndpoint = main.APIEndpoints.GetDefault()
+	}
+
+	if !apiEndpoint.LoadBalancer.ManageELBRecordSet() {
+		fmt.Printf(`WARN: the worker node pool "%s" is associated to a k8s API endpoint behind the DNS name "%s" managed by YOU!
+Please never point the DNS record for it to a different k8s cluster, especially when the name is a "stable" one which is shared among multiple k8s clusters for achieving blue-green deployments of k8s clusters!
+kube-aws can't save users from mistakes like that
+`, c.NodePoolName, apiEndpoint.DNSName)
+	}
+	c.APIEndpoint = apiEndpoint
 
 	return nil
 }
@@ -195,8 +271,14 @@ func ClusterFromBytesWithEncryptService(data []byte, main *cfg.Config, encryptSe
 	if err != nil {
 		return nil, err
 	}
-	cluster.providedEncryptService = encryptService
+	cluster.ProvidedEncryptService = encryptService
 	return cluster, nil
+}
+
+// APIEndpointURL is the url of the API endpoint which is written in cloud-config-worker and used by kubelets in worker nodes
+// to access the apiserver
+func (c ProvidedConfig) APIEndpointURL() string {
+	return fmt.Sprintf("https://%s", c.APIEndpoint.DNSName)
 }
 
 func (c ProvidedConfig) Config() (*ComputedConfig, error) {

@@ -93,6 +93,8 @@ There will now be a `cluster.yaml` file in the asset directory. This is the main
 
 ### Render contents of the asset directory
 
+#### TLS certificates
+
 * In the simplest case, you can have kube-aws generate both your TLS identities and certificate authority for you.
 
   ```sh
@@ -114,10 +116,11 @@ There will now be a `cluster.yaml` file in the asset directory. This is the main
   ```sh
 
   ls -R credentials/
-  credentials/:
-  admin-key.pem       apiserver-key.pem   ca-key.pem          etcd-client-key.pem etcd-key.pem        tokens.csv          worker.pem
-  admin.pem           apiserver.pem       ca.pem              etcd-client.pem     etcd.pem            worker-key.pem
+  admin-key.pem       apiserver-key.pem   ca-key.pem          etcd-client-key.pem etcd-key.pem        worker-key.pem
+  admin.pem           apiserver.pem       ca.pem              etcd-client.pem     etcd.pem            worker.pem
   ```
+
+### Render cluster assets
 
 The next command generates the default set of cluster assets in your asset directory.
 
@@ -144,7 +147,6 @@ $ tree
 │   └── etcd.pem
 │   ├── etcd-client-key.pem
 │   └── etcd-client.pem
-│   └── tokens.csv
 ├── kubeconfig
 ├── stack-template.json
 └── userdata
