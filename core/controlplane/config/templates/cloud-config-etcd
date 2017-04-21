@@ -161,6 +161,8 @@ coreos:
             [Unit]
             Wants=cfn-etcd-environment.service
             After=cfn-etcd-environment.service
+            Restart=always
+            RestartSec=10
             {{- if .AssetsEncryptionEnabled}}
             Wants=decrypt-assets.service
             After=decrypt-assets.service
