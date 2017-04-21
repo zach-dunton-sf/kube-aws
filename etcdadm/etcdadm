@@ -158,7 +158,7 @@ cluster_num_running_nodes() {
 }
 
 cluster_num_healthy_members() {
-  member_etcdctl endpoint health | grep 'is healthy' | wc -l
+  member_etcdctl endpoint health | grep 'is healthy' | wc -l || :
 }
 
 cluster_is_failing_longer_than_limit() {
