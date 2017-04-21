@@ -57,6 +57,9 @@ coreos:
         RestartSec=5
         Environment=ETCDADM_MEMBER_ENV_FILE=/var/run/coreos/etcdadm/etcd-member.env
         Environment=ETCD_VERSION={{ .Etcd.Version }}
+        {{if .Etcd.DisasterRecovery.IsAutomatedForEtcdVersion .Etcd.Version -}}
+        Environment=ETCDADM_CLUSTER_AUTORECOVER=1
+        {{end -}}
         EnvironmentFile=-/etc/etcd-environment
         EnvironmentFile=-/var/run/coreos/etcdadm-environment
         ExecStartPre=/usr/bin/systemctl is-active cfn-etcd-environment.service

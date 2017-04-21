@@ -162,7 +162,7 @@ cluster_num_healthy_members() {
 }
 
 cluster_is_failing_longer_than_limit() {
-  cluster_failure_beginning_time_is_set &&
+  (( ${ETCDADM_CLUSTER_AUTORECOVER:-0} )) && cluster_failure_beginning_time_is_set &&
     (( $(_current_time) > $(cluster_failure_beginning_time) + $(cluster_failure_period_limit) ))
 }
 
