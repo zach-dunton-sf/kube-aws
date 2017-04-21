@@ -62,9 +62,6 @@ coreos:
         ExecStartPre=/usr/bin/systemctl is-active cfn-etcd-environment.service
         ExecStartPre=/usr/bin/mkdir -p /var/run/coreos/etcdadm/snapshots
         ExecStart=/opt/bin/etcdadm reconfigure
-        {{if .Etcd.DisasterRecovery.IsAutomatedForEtcdVersion .Etcd.Version -}}
-        ExecStartPost=/usr/bin/systemctl start etcdadm-check.timer
-        {{end -}}
         TimeoutStartSec=120
 
         [Install]
@@ -102,13 +99,13 @@ coreos:
         Type=oneshot
         EnvironmentFile=-/etc/etcd-environment
         EnvironmentFile=-/var/run/coreos/etcdadm-environment
-        ExecStartPre=/usr/bin/systemctl is-active {{.Etcd.SystemdUnitName}}
         ExecStart=/opt/bin/etcdadm check
         TimeoutStartSec=120
 
-    {{if .Etcd.DisasterRecovery.IsAutomatedForEtcdVersion .Etcd.Version -}}
+    {{if .Etcd.DisasterRecovery.SupportsEtcdVersion .Etcd.Version -}}
     - name: etcdadm-check.timer
       enable: true
+      command: start
       content: |
         [Unit]
         Description=periodic etcd health check
@@ -558,7 +555,9 @@ write_files:
       ETCD_LISTEN_CLIENT_URLS=https://$private_ip:2379
       ETCD_ADVERTISE_CLIENT_URLS=https://$advertised_hostname:2379
       ETCD_LISTEN_PEER_URLS=https://$private_ip:2380
-      ETCD_INITIAL_ADVERTISE_PEER_URLS=https://$advertised_hostname:2380" >> /var/run/coreos/etcd-environment
+      ETCD_INITIAL_ADVERTISE_PEER_URLS=https://$advertised_hostname:2380
+
+      ETCD_CLUSTER_FAILURE_PERIOD_LIMIT=120" >> /var/run/coreos/etcd-environment
 
   - path: /opt/bin/cfn-etcd-environment
     owner: root:root
