@@ -403,7 +403,6 @@ member_replace_failed() {
   local peer_url
   local next_index
   local client_url
-  local id
 
   name=$(member_name)
   peer_url=$(member_peer_url)
@@ -413,17 +412,20 @@ member_replace_failed() {
   member_clean_data_dir
 
   _info "connecting to ${client_url}"
-  etcdctl --peers "${client_url}" member list
+  etcdctl --peers "${client_url}" member list || :
   # Outputs from `member list` could be something like:
   # 2be084460d94d630: name=etcd0 peerURLs=https://ec2-54-92-69-116.ap-northeast-1.compute.amazonaws.com:2380 clientURLs=https://ec2-54-92-69-116.ap-northeast-1.compute.amazonaws.com:2379 isLeader=true
   # 5eee1d3e770689e1: name=etcd1 peerURLs=https://ec2-52-193-215-187.ap-northeast-1.compute.amazonaws.com:2380 clientURLs=https://ec2-52-193-215-187.ap-northeast-1.compute.amazonaws.com:2379 isLeader=false
   # bd14b8ad55c143ad[unstarted]: peerURLs=https://ec2-13-112-206-16.ap-northeast-1.compute.amazonaws.com:2380
-  id=$(etcdctl --peers "${client_url}" member list | grep "${peer_url}" | cut -d ':' -f 1 | cut -d '[' -f 1)
+  local id=$(etcdctl --peers "${client_url}" member list | grep "${peer_url}" | cut -d ':' -f 1 | cut -d '[' -f 1)
 
-  _info "removing member ${id}"
-  etcdctl --peers "${client_url}" member remove "${id}"
-  # Wait until the cluster becomes healthy when the removed member was the leader
-  sleep 1
+  # as part of debugging/recovery human operator might delete us from cluster, don't fail if it happens
+  if [[ -n "$id" ]]; then
+    _info "removing member ${id}"
+    etcdctl --peers "${client_url}" member remove "${id}"
+    # Wait until the cluster becomes healthy when the removed member was the leader
+    sleep 1
+  fi
   _info "adding member ${id}"
   etcdctl --peers "${client_url}" member add "${name}" "${peer_url}"
 
@@ -628,6 +630,9 @@ member_reconfigure() {
 
   if (( healthy >= quorum )); then
     # At least N/2+1 members are working
+    
+    # as there is quorum, set unit type so that it reports readiness upon joining the cluster
+    member_set_unit_type notify
 
     if member_is_unstarted; then
       # This member appeared to be "unstarted" in outputs of `etcdctl member list` against other etcd members
@@ -642,8 +647,9 @@ member_reconfigure() {
         # the snapshot contained the information about this member hence it is recognized to be "unstarted" by other members,
         # instead of just being invisible from them.
         # In other words, the cluster is still in process of a disaster recovery and this is the `N/2+1`th or later member.
-        _info 'cluster is already healthy but still in bootstrap process after the disaster recovery. searching for a etcd snapshot to recover this member'
-        member_bootstrap
+        _info 'cluster is already healthy but still in bootstrap process after the disaster recovery. Data will be downloaded from quorum'
+        # there can be old garbage in data dir, wipe it all and let quorum give us most up to date values
+        member_clean_data_dir 
       fi
     elif member_is_failing_longer_than_limit; then
       # This member seems to be consistently failing
@@ -696,9 +702,9 @@ member_reconfigure() {
     else
       _info "all the nodes are present but cluster is still unhealthy, which means the initial bootstrap is still in progress. keep retrying a while"
     fi
-
-    _systemctl_daemon_reload
   fi
+
+  _systemctl_daemon_reload
 }
 
 member_is_unstarted() {
@@ -713,10 +719,9 @@ member_is_unstarted() {
 
   _info "connecting to ${client_url}"
 
-  etcdctl --peers "${client_url}" member list
+  etcdctl --peers "${client_url}" member list || :
 
-  local unstarted_peer
-  unstarted_peer=$(etcdctl --peers "${client_url}" member list | grep unstarted | grep "${peer_url}")
+  local unstarted_peer=$(etcdctl --peers "${client_url}" member list | grep unstarted | grep "${peer_url}")
 
   if [ "${unstarted_peer}" != "" ]; then
     _info "unstarted peer for this member($(member_name)) is found"
