@@ -158,15 +158,7 @@ cluster_num_running_nodes() {
 }
 
 cluster_num_healthy_members() {
-  local i
-  local n
-  n=$member_count
-  for i in $(cluster_member_indices); do
-    if ! ETCDADM_MEMBER_INDEX=$i member_is_healthy; then
-      n=$((n - 1))
-    fi
-  done
-  echo ${n}
+  member_etcdctl endpoint health | grep 'is healthy' | wc -l
 }
 
 cluster_is_failing_longer_than_limit() {
@@ -435,8 +427,6 @@ member_replace_failed() {
   _info "adding member ${id}"
   etcdctl --peers "${client_url}" member add "${name}" "${peer_url}"
 
-  member_set_initial_cluster_state existing
-
   member_status_set_replaced
 
   _systemctl_daemon_reload
@@ -454,11 +444,8 @@ member_bootstrap() {
     member_restore_from_local_snapshot
   else
     _info "backup not found. starting brand new $(member_name)..."
+    member_set_initial_cluster_state new
   fi
-
-  member_set_initial_cluster_state new
-
-  _systemctl_daemon_reload
 }
 
 _systemctl_daemon_reload() {
@@ -636,6 +623,9 @@ member_reconfigure() {
 
   _info "observing cluster state: quorum=$quorum healthy=$healthy"
 
+  # we always force state to existing unless told otherwise in special cases
+  member_set_initial_cluster_state existing
+
   if (( healthy >= quorum )); then
     # At least N/2+1 members are working
 
@@ -705,8 +695,9 @@ member_reconfigure() {
       member_bootstrap
     else
       _info "all the nodes are present but cluster is still unhealthy, which means the initial bootstrap is still in progress. keep retrying a while"
-      _systemctl_daemon_reload
     fi
+
+    _systemctl_daemon_reload
   fi
 }
 
@@ -800,13 +791,13 @@ member_etcdctl() {
     --mount volume=data-dir,target=/var/lib/etcd \
     --uuid-file-save="$uuid_file" \
     "$etcd_aci_url" \
-    --exec etcdctl -- --endpoints "$(member_client_url)" ${*}
+    --exec etcdctl -- --endpoints "$ETCD_ENDPOINTS" ${*}
   _run_as_root rkt rm --uuid-file "$uuid_file"
   rm "$uuid_file"
 }
 
 member_is_healthy() {
-  member_etcdctl endpoint health | grep "is healthy" 1>&2
+  ETCD_ENDPOINTS=$(member_client_url) member_etcdctl endpoint health | grep "is healthy" 1>&2
 }
 
 member_etcdctl_v2() {
