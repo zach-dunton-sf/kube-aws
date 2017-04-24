@@ -65,6 +65,9 @@ coreos:
         ExecStartPre=/usr/bin/systemctl is-active cfn-etcd-environment.service
         ExecStartPre=/usr/bin/mkdir -p /var/run/coreos/etcdadm/snapshots
         ExecStart=/opt/bin/etcdadm reconfigure
+        {{if .Etcd.DisasterRecovery.IsAutomatedForEtcdVersion .Etcd.Version -}}
+        ExecStartPost=/usr/bin/systemctl start etcdadm-check.timer
+        {{end -}}
         TimeoutStartSec=120
 
         [Install]
@@ -105,10 +108,9 @@ coreos:
         ExecStart=/opt/bin/etcdadm check
         TimeoutStartSec=120
 
-    {{if .Etcd.DisasterRecovery.SupportsEtcdVersion .Etcd.Version -}}
+    {{if .Etcd.DisasterRecovery.IsAutomatedForEtcdVersion .Etcd.Version -}}
     - name: etcdadm-check.timer
       enable: true
-      command: start
       content: |
         [Unit]
         Description=periodic etcd health check
