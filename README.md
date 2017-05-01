@@ -45,7 +45,7 @@ Check out our getting started tutorial on launching your first Kubernetes cluste
   * Destroy the cluster
 * **Optional Features**
   * [Backup and restore for etcd](/Documentation/kubernetes-on-aws-backup-and-restore-for-etcd.md)
-  * [Backup Kubernetes resources](/Documentation/kubernetes-on-aws-backup.md)
+  * [Backup/Autosave Kubernetes resources](/Documentation/kubernetes-on-aws-backup.md)
   * [Restore Kubernetes resources](/contrib/cluster-backup/README.md)
 
 ## Examples
