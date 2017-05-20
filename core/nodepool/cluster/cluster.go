@@ -161,10 +161,6 @@ func (c *Cluster) Update() (string, error) {
 
 // ValidateStack validates the CloudFormation stack for this worker node pool already uploaded to S3
 func (c *Cluster) ValidateStack() (string, error) {
-	if err := c.ValidateUserData(); err != nil {
-		return "", fmt.Errorf("failed to validate userdata : %v", err)
-	}
-
 	ec2Svc := ec2.New(c.session())
 	if err := c.validateWorkerRootVolume(ec2Svc); err != nil {
 		return "", err

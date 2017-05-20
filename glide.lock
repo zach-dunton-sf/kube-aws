@@ -1,10 +1,14 @@
-hash: 61650b1ec198a8e63d341908512a136ee16a45bd82e46f71945f807ccbee2715
-updated: 2017-05-02T16:49:23.488146022+01:00
+hash: edc375d4d3fe051f5808a98bd6f625225fe681806a0af308e222c80dfe8af023
+updated: 2017-05-20T07:01:48.573322Z
 imports:
+- name: github.com/ajeddeloh/yaml
+  version: 1072abfea31191db507785e2e0c1b8d1440d35a5
+- name: github.com/alecthomas/units
+  version: 6b4e7dc5e3143b85ea77909c72caf89416fc2915
 - name: github.com/aokoli/goutils
   version: e57d01ace047c1a43e6a49ecf3ecc50ed2be81d1
 - name: github.com/aws/aws-sdk-go
-  version: 0dbc446aca87aebb6e0a24509b59bafc0e3ec0ae
+  version: 0b6039ef3d10c1eda49843ebf9773dcc5bba0169
   subpackages:
   - aws
   - aws/awserr
@@ -38,19 +42,33 @@ imports:
   - service/route53
   - service/s3
   - service/sts
-- name: github.com/coreos/coreos-cloudinit
-  version: 5be99bf577f2768193c7fb587ef5a8806c1503cf
+- name: github.com/coreos/container-linux-config-transpiler
+  version: 3e173fb3a4dca4e14541dbb7a4076f64061a4ff6
   subpackages:
   - config
-  - config/validate
+  - config/templating
+  - config/types
 - name: github.com/coreos/go-semver
   version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
   subpackages:
   - semver
-- name: github.com/coreos/yaml
-  version: 6b16a5714269b2f70720a45406b1babd947a17ef
+- name: github.com/coreos/go-systemd
+  version: 1f9909e51b2dab2487c26d64c8f2e7e580e4c9f5
+  subpackages:
+  - unit
+- name: github.com/coreos/ignition
+  version: d75d0aa3bf307f0954ce4ea8cac56dacec8d16ce
+  subpackages:
+  - config/types
+  - config/v2_0/types
+  - config/validate
+  - config/validate/report
 - name: github.com/go-ini/ini
-  version: e7fea39b01aea8d5671f6858f0532f56e8bff3a5
+  version: afbc45e87f3ba324c532d12c71918ef52e0fb194
+- name: github.com/huandu/xstrings
+  version: 3959339b333561bf62a38b424fd41517c2c90f40
+- name: github.com/imdario/mergo
+  version: 3e95a51e0639b4cf372f2ccf74c86749d747fbdc
 - name: github.com/inconshreveable/mousetrap
   version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
 - name: github.com/jmespath/go-jmespath
@@ -58,18 +76,27 @@ imports:
 - name: github.com/Masterminds/semver
   version: 59c29afe1a994eacb71c833025ca7acf874bb1da
 - name: github.com/Masterminds/sprig
-  version: 23597e5f6ad0e4d590e71314bfd0251a4a3cf849
+  version: 9526be0327b26ad31aa70296a7b10704883976d5
 - name: github.com/satori/go.uuid
   version: 879c5887cd475cd7864858769793b2ceb0d44feb
 - name: github.com/spf13/cobra
-  version: 8f0203be891287870100e4af46262cdf4a4261d1
+  version: ca5710c94eabe15aa1f74490b8e5976dc652e8c6
 - name: github.com/spf13/pflag
-  version: c990990ab4981d84da820b7b00c85139ca150b5f
+  version: e57e3eeb33f795204c1ca35f56c44f83227c6e66
+- name: github.com/vincent-petithory/dataurl
+  version: 9a301d65acbb728fcc3ace14f45f511a4cfeea9c
 - name: golang.org/x/crypto
-  version: 8e03fc1ab6a36bdb9e7dee75a213c30f0249d0c1
+  version: 0fe963104e9d1877082f8fb38f816fcd97eb1d10
   subpackages:
   - pbkdf2
   - scrypt
 - name: gopkg.in/yaml.v2
   version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
-testImports: []
+testImports:
+- name: github.com/coreos/coreos-cloudinit
+  version: d9e03750a7985103b89aa44574bfe7929007ec20
+  subpackages:
+  - config
+  - config/validate
+- name: github.com/coreos/yaml
+  version: 6b16a5714269b2f70720a45406b1babd947a17ef

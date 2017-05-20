@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"github.com/kubernetes-incubator/kube-aws/coreos/userdatavalidation"
 	"github.com/kubernetes-incubator/kube-aws/filereader/jsontemplate"
 	"github.com/kubernetes-incubator/kube-aws/fingerprint"
 	"net/url"
@@ -49,14 +48,6 @@ func (c *StackConfig) UserDataWorkerS3URI() (string, error) {
 // UserDataWorkerFileName is used to upload and download userdata-worker-<fingerprint> files
 func (c *StackConfig) UserDataWorkerFileName() string {
 	return "userdata-worker-" + fingerprint.SHA256(c.UserDataWorker)
-}
-
-func (c *StackConfig) ValidateUserData() error {
-	err := userdatavalidation.Execute([]userdatavalidation.Entry{
-		{Name: "UserDataWorker", Content: c.UserDataWorker},
-	})
-
-	return err
 }
 
 func (c *StackConfig) Compress() (*CompressedStackConfig, error) {

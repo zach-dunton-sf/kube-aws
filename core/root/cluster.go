@@ -102,7 +102,6 @@ type Cluster interface {
 	Update() (string, error)
 	ValidateStack() (string, error)
 	ValidateTemplates() error
-	ValidateUserData() error
 	ControlPlane() *controlplane.Cluster
 }
 
@@ -304,18 +303,6 @@ func (c clusterImpl) Update() (string, error) {
 	}
 
 	return c.stackProvisioner().UpdateStackAtURLAndWait(cfSvc, templateUrl)
-}
-
-func (c clusterImpl) ValidateUserData() error {
-	if err := c.controlPlane.ValidateUserData(); err != nil {
-		return fmt.Errorf("failed to validate control plane: %v", err)
-	}
-	for i, p := range c.nodePools {
-		if err := p.ValidateUserData(); err != nil {
-			return fmt.Errorf("failed to validate node pool #%d: %v", i, err)
-		}
-	}
-	return nil
 }
 
 func (c clusterImpl) ValidateTemplates() error {

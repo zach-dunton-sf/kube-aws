@@ -11,11 +11,7 @@ import:
   - service/elb
   - service/kms
   - service/route53
-- package: github.com/coreos/coreos-cloudinit
-  version: ^1.12.0
-  subpackages:
-  - config/validate
-- package: github.com/coreos/container-linux-transpiler
+- package: github.com/coreos/container-linux-config-transpiler
   version: ^0.3.1
   subpackages:
   - config

@@ -24,7 +24,7 @@ We've designed our implementation to allow the same cloud-config file to work ac
 
 The cloud-config file uses the [YAML][yaml] file format, which uses whitespace and new-lines to delimit lists, associative arrays, and values.
 
-A cloud-config file must contain a header: either `#cloud-config` for processing as cloud-config (suggested) or `#!` for processing as a shell script (advanced). If cloud-config has #cloud-config header, it should followed by an associative array which has zero or more of the following keys:
+A cloud-config file must contain a header: either `#cloud-config` for processing as cloud-config (suggested) or `#!` for processing as a shell script (advanced). If cloud-config has the `#cloud-config` header, it should followed by an associative array which has zero or more of the following keys:
 
 - `coreos`
 - `ssh_authorized_keys`
@@ -274,7 +274,7 @@ Each item is an object with the following fields:
 
 - **name**: String representing unit's name. Required.
 - **runtime**: Boolean indicating whether or not to persist the unit across reboots. This is analogous to the `--runtime` argument to `systemctl enable`. The default value is false.
-- **enable**: Boolean indicating whether or not to handle the [Install] section of the unit file. This is similar to running `systemctl enable <name>`. The default value is false.
+- **enable**: Boolean indicating whether or not to handle the `[Install]` section of the unit file. This is similar to running `systemctl enable <name>`. The default value is false.
 - **content**: Plaintext string representing entire unit file. If no value is provided, the unit is assumed to exist already.
 - **command**: Command to execute on unit: start, stop, reload, restart, try-restart, reload-or-restart, reload-or-try-restart. The default behavior is to not execute any commands.
 - **mask**: Whether to mask the unit file by symlinking it to `/dev/null` (analogous to `systemctl mask <name>`). Note that unlike `systemctl mask`, **this will destructively remove any existing unit file** located at `/etc/systemd/system/<unit>`, to ensure that the mask succeeds. The default value is false.
@@ -375,9 +375,9 @@ All but the `passwd` and `ssh-authorized-keys` fields will be ignored if the use
 - **groups**: Add user to these additional groups
 - **no-user-group**: Boolean. Skip default group creation.
 - **ssh-authorized-keys**: List of public SSH keys to authorize for this user
-- **coreos-ssh-import-github** [DEPRECATED]: Authorize SSH keys from GitHub user
-- **coreos-ssh-import-github-users** [DEPRECATED]: Authorize SSH keys from a list of GitHub users
-- **coreos-ssh-import-url** [DEPRECATED]: Authorize SSH keys imported from a url endpoint.
+- **coreos-ssh-import-github** (DEPRECATED): Authorize SSH keys from GitHub user
+- **coreos-ssh-import-github-users** (DEPRECATED): Authorize SSH keys from a list of GitHub users
+- **coreos-ssh-import-url** (DEPRECATED): Authorize SSH keys imported from a url endpoint.
 - **system**: Create the user as a system user. No home directory will be created.
 - **no-log-init**: Boolean. Skip initialization of lastlog and faillog databases.
 - **shell**: User's login shell.

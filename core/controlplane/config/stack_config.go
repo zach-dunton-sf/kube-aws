@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/kubernetes-incubator/kube-aws/coreos/userdatavalidation"
 	"github.com/kubernetes-incubator/kube-aws/filereader/jsontemplate"
 	"github.com/kubernetes-incubator/kube-aws/fingerprint"
 	"github.com/kubernetes-incubator/kube-aws/model"
@@ -126,16 +125,6 @@ func (c *StackConfig) EtcdSnapshotsS3PrefixRef() (string, error) {
 	}
 	s3path := fmt.Sprintf(`{ "Fn::Join" : [ "", [ "%s/instances/", { "Fn::Select" : [ "2", { "Fn::Split": [ "/", { "Ref": "AWS::StackId" }]} ]}, "/etcd-snapshots" ]]}`, strings.TrimLeft(s3uri.Path, "/"))
 	return s3path, nil
-}
-
-func (c *StackConfig) ValidateUserData() error {
-	err := userdatavalidation.Execute([]userdatavalidation.Entry{
-		{Name: "UserDataWorker", Content: c.UserDataWorker},
-		{Name: "UserDataController", Content: c.UserDataController},
-		{Name: "UserDataEtcd", Content: c.UserDataEtcd},
-	})
-
-	return err
 }
 
 func (c *StackConfig) Compress() (*CompressedStackConfig, error) {
