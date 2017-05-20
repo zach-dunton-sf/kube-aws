@@ -1,33 +1,26 @@
-#cloud-config
-coreos:
-  update:
-    reboot-strategy: "off"
-  flannel:
-    interface: $private_ipv4
+locksmith:
+    reboot_strategy: "off"
+flannel:
+    interface: ${PRIVATE_IPV4}
     etcd_cafile: /etc/kubernetes/ssl/ca.pem
     etcd_certfile: /etc/kubernetes/ssl/etcd-client.pem
     etcd_keyfile: /etc/kubernetes/ssl/etcd-client-key.pem
 
+systemd
   units:
 {{- range $u := .Controller.CustomSystemdUnits}}
     - name: {{$u.Name}}
-      command: {{ $u.Command }}
       {{- if $u.Enable }}
       enable: {{ $u.Enable }}
       {{- end }}
-      {{- if $u.Runtime }}
-      runtime: {{ $u.Runtime }}
-      {{- end }}
-      content: |
+      contents: |
         {{- range $l := $u.ContentArray}}
         {{ $l }}
         {{- end }}
 {{- end}}
     - name: cfn-etcd-environment.service
       enable: true
-      command: start
-      runtime: true
-      content: |
+      contents: |
         [Unit]
         Description=Fetches etcd static IP addresses list from CF
         After=network-online.target
@@ -38,20 +31,10 @@ coreos:
         ExecStartPre=/opt/bin/cfn-etcd-environment
         ExecStart=/usr/bin/mv -f /var/run/coreos/etcd-environment /etc/etcd-environment
 
-{{if .UseCalico }}
-    # https://github.com/coreos/docs/blob/5d7b1cccb8286185275b07db1495828be9fdb0ea/os/other-settings.md#tuning-sysctl-parameters
-    - name: systemd-modules-load.service
-      command: restart
-    - name: systemd-sysctl.service
-      command: restart
-{{ end }}
-
 {{if .Experimental.AwsEnvironment.Enabled}}
     - name: set-aws-environment.service
       enable: true
-      command: start
-      runtime: true
-      content: |
+      contents: |
         [Unit]
         Description=Set AWS environment variables in /etc/aws-environment
         After=network-online.target
@@ -63,22 +46,22 @@ coreos:
         ExecStart=/opt/bin/set-aws-environment
 {{end}}
     - name: docker.service
-      drop-ins:
+      dropins:
 {{if .Experimental.EphemeralImageStorage.Enabled}}
         - name: 10-docker-mount.conf
-          content: |
+          contents: |
             [Unit]
             After=var-lib-docker.mount
             Wants=var-lib-docker.mount
 {{end}}
         - name: 10-post-start-check.conf
-          content: |
+          contents: |
             [Service]
             RestartSec=10
             ExecStartPost=/usr/bin/docker pull {{.PauseImage.RepoWithTag}}
 
         - name: 40-flannel.conf
-          content: |
+          contents: |
             [Unit]
             Wants=flanneld.service
             [Service]
@@ -86,14 +69,14 @@ coreos:
             ExecStartPre=/usr/bin/systemctl is-active flanneld.service
 
         - name: 60-logfilelimit.conf
-          content: |
+          contents: |
             [Service]
             Environment="DOCKER_OPTS=--log-opt max-size=50m --log-opt max-file=3"
 
     - name: flanneld.service
-      drop-ins:
+      dropins:
         - name: 10-etcd.conf
-          content: |
+          contents: |
             [Unit]
             Wants=cfn-etcd-environment.service
             After=cfn-etcd-environment.service
@@ -105,7 +88,7 @@ coreos:
             ExecStartPre=/usr/bin/systemctl is-active cfn-etcd-environment.service
             ExecStartPre=/bin/sh -ec "echo FLANNELD_ETCD_ENDPOINTS=${ETCD_ENDPOINTS} >/run/flannel/etcd-endpoints.opts"
             {{- if .AssetsEncryptionEnabled }}
-            ExecStartPre=/opt/bin/decrypt-assets
+                  ExecStartPre=/opt/bin/decrypt-assets
             {{- end}}
             ExecStartPre=/usr/bin/etcdctl \
             --ca-file=/etc/kubernetes/ssl/ca.pem \
@@ -117,7 +100,7 @@ coreos:
 
 {{if .FlannelImage.RktPullDocker}}
         - name: 20-flannel-custom-image.conf
-          content: |
+          contents: |
             [Unit]
             PartOf=flanneld.service
             Before=docker.service
@@ -127,9 +110,9 @@ coreos:
             Environment="RKT_RUN_ARGS={{.FlannelImage.Options}}"
 
     - name: flannel-docker-opts.service
-      drop-ins:
+      dropins:
         - name: 10-flannel-docker-options.conf
-          content: |
+          contents: |
             [Unit]
             PartOf=flanneld.service
             Before=docker.service
@@ -139,9 +122,7 @@ coreos:
             Environment="RKT_RUN_ARGS={{.FlannelImage.Options}} --uuid-file-save=/var/lib/coreos/flannel-wrapper2.uuid"
 {{end}}
     - name: kubelet.service
-      command: start
-      runtime: true
-      content: |
+      contents: |
         [Unit]
         Wants=flanneld.service cfn-etcd-environment.service
         After=cfn-etcd-environment.service
@@ -214,7 +195,7 @@ coreos:
 {{ if eq .ContainerRuntime "rkt" }}
     - name: rkt-api.service
       enable: true
-      content: |
+      contents: |
         [Unit]
         Before=kubelet.service
         [Service]
@@ -226,7 +207,7 @@ coreos:
 
     - name: load-rkt-stage1.service
       enable: true
-      content: |
+      contents: |
         [Unit]
         Description=Load rkt stage1 images
         Documentation=http://github.com/coreos/rkt
@@ -242,9 +223,7 @@ coreos:
 {{ end }}
 
     - name: install-kube-system.service
-      command: start
-      runtime: true
-      content: |
+      contents: |
         [Unit]
         Wants=kubelet.service docker.service
 
@@ -260,11 +239,9 @@ coreos:
 
 {{ if $.ElasticFileSystemID }}
     - name: rpc-statd.service
-      command: start
       enable: true
     - name: efs.service
-      command: start
-      content: |
+      contents: |
         [Unit]
         After=network-online.target
         Before=kubelet.service
@@ -279,8 +256,7 @@ coreos:
 {{ end }}
 {{if .WaitSignal.Enabled}}
     - name: cfn-signal.service
-      command: start
-      content: |
+      contents: |
         [Unit]
         Wants=kubelet.service docker.service
         After=kubelet.service
@@ -296,9 +272,7 @@ coreos:
 {{if .Experimental.AwsNodeLabels.Enabled }}
     - name: kube-node-label.service
       enable: true
-      command: start
-      runtime: true
-      content: |
+      contents: |
         [Unit]
         Description=Label this kubernetes node with additional AWS parameters
         After=kubelet.service
@@ -340,8 +314,7 @@ coreos:
 
 {{if .Experimental.EphemeralImageStorage.Enabled}}
     - name: format-ephemeral.service
-      command: start
-      content: |
+      contents: |
         [Unit]
         Description=Formats the ephemeral drive
         ConditionFirstBoot=yes
@@ -353,8 +326,7 @@ coreos:
         ExecStart=/usr/sbin/wipefs -f /dev/{{.Experimental.EphemeralImageStorage.Disk}}
         ExecStart=/usr/sbin/mkfs.{{.Experimental.EphemeralImageStorage.Filesystem}} -f /dev/{{.Experimental.EphemeralImageStorage.Disk}}
     - name: var-lib-docker.mount
-      command: start
-      content: |
+      contents: |
         [Unit]
         Description=Mount ephemeral to /var/lib/docker
         Requires=format-ephemeral.service
@@ -370,8 +342,7 @@ coreos:
 {{end}}
 {{ if .SharedPersistentVolume }}
     - name: load-efs-pv.service
-      command: start
-      content: |
+      contents: |
         [Unit]
         Description=Load efs persistent volume mount
         Wants=kubelet.service
@@ -387,18 +358,19 @@ coreos:
 {{end}}
 
 {{if .SSHAuthorizedKeys}}
-ssh_authorized_keys:
+passwd:
+  users:
+    - name: core
+      ssh_authorized_keys:
   {{range $sshkey := .SSHAuthorizedKeys}}
-  - {{$sshkey}}
+        - {{$sshkey}}
   {{end}}
 {{end}}
 
 {{if .Region.IsChina}}
     - name: pause-amd64.service
       enable: true
-      command: start
-      runtime: true
-      content: |
+      contents: |
         [Unit]
         Description=Pull and tag a mirror image for pause-amd64
         Wants=docker.service
@@ -414,28 +386,33 @@ ssh_authorized_keys:
         [Install]
         WantedBy=install-kube-system.service
 {{end}}
-write_files:
+storage:
+  files:
 {{- if .Controller.CustomFiles}}
   {{- range $w := .Controller.CustomFiles}}
   - path: {{$w.Path}}
-    permissions: {{$w.PermissionsString}}
+    filesystem: root
+    mode: {{$w.PermissionsString}}
     encoding: gzip+base64
-    content: {{$w.GzippedBase64Content}}
+    contents:
+      inline: {{$w.GzippedBase64Content}}
   {{- end }}
 {{- end }}
 {{if .Experimental.DisableSecurityGroupIngress}}
   - path: /etc/kubernetes/additional-configs/cloud.config
-    owner: root:root
+    filesystem: root
     permissions: 0644
-    content: |
+    contents:
+     inline: |
       [global]
       DisableSecurityGroupIngress = true
 {{end}}
 {{if .Experimental.AwsEnvironment.Enabled}}
   - path: /opt/bin/set-aws-environment
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -e
 
       rkt run \
@@ -463,9 +440,10 @@ write_files:
 {{end}}
 {{ if .SharedPersistentVolume }}
   - path: /opt/bin/set-efs-pv
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -e
 
       rkt run \
@@ -492,9 +470,10 @@ write_files:
       rkt rm --uuid-file=/var/run/coreos/set-efs-pv.uuid || :
 {{end}}
   - path: /opt/bin/cfn-signal
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -e
 
       rkt run \
@@ -521,9 +500,10 @@ write_files:
       rkt rm --uuid-file=/var/run/coreos/cfn-signal.uuid || :
 
   - path: /opt/bin/cfn-etcd-environment
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -e
 
       rkt run \
@@ -550,9 +530,10 @@ write_files:
       rkt rm --uuid-file=/var/run/coreos/cfn-etcd-environment.uuid || :
 
   - path: /opt/bin/install-kube-system
+    filesystem: root
     permissions: 0700
-    owner: root:root
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -e
 
       kubectl() {
@@ -620,14 +601,17 @@ write_files:
       {{ end }}
 
   - path: /etc/kubernetes/cni/docker_opts_cni.env
-    content: |
+    filesystem: root
+    contents:
+     inline: |
       DOCKER_OPT_BIP=""
       DOCKER_OPT_IPMASQ=""
 
   - path: /opt/bin/host-rkt
+    filesystem: root
     permissions: 0755
-    owner: root:root
-    content: |
+    contents:
+     inline: |
       #!/bin/sh
       # This is bind mounted into the kubelet rootfs and all rkt shell-outs go
       # through this rkt wrapper. It essentially enters the host mount namespace
@@ -641,7 +625,9 @@ write_files:
 
 {{ if .UseCalico }}
   - path: /srv/kubernetes/manifests/calico.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
       kind: ConfigMap
       apiVersion: v1
       metadata:
@@ -848,9 +834,10 @@ write_files:
                   secretName: calico-etcd-secrets
 
   - path: /opt/bin/populate-tls-calico-etcd
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -e
 
       etcd_ca=$(cat /etc/kubernetes/ssl/ca.pem | base64 | tr -d '\n')
@@ -864,7 +851,9 @@ write_files:
 {{ end }}
 {{ if .KubeResourcesAutosave.Enabled }}
   - path: /srv/kubernetes/manifests/kube-resources-autosave.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
       ---
       apiVersion: extensions/v1beta1
       kind: Deployment
@@ -975,9 +964,10 @@ write_files:
 
 {{if .AssetsEncryptionEnabled }}
   - path: /opt/bin/decrypt-assets
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -e
 
       rkt run \
@@ -1029,7 +1019,9 @@ write_files:
   # Makes kube-worker user behave like a regular member of system:nodes group,
   # needed when TLS bootstrapping is disabled
   - path: /srv/kubernetes/rbac/cluster-role-bindings/node.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         kind: ClusterRoleBinding
         apiVersion: rbac.authorization.k8s.io/v1beta1
         metadata:
@@ -1045,7 +1037,9 @@ write_files:
   # We need to give nodes a few extra permissions so that both the node
   # draining and node labeling with AWS metadata work as expected
   - path: /srv/kubernetes/rbac/cluster-roles/node-extensions.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         kind: ClusterRole
         apiVersion: rbac.authorization.k8s.io/v1beta1
         metadata:
@@ -1082,7 +1076,9 @@ write_files:
 
   # Grants super-user permissions to the kube-admin user
   - path: /srv/kubernetes/rbac/cluster-role-bindings/kube-admin.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         kind: ClusterRoleBinding
         apiVersion: rbac.authorization.k8s.io/v1beta1
         metadata:
@@ -1100,7 +1096,9 @@ write_files:
   # is migrated to DaemonSets, we could set up a ServiceAccount for it and
   # associate this role to it instead.
   - path: /srv/kubernetes/rbac/cluster-role-bindings/node-proxier.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         kind: ClusterRoleBinding
         apiVersion: rbac.authorization.k8s.io/v1beta1
         metadata:
@@ -1117,7 +1115,9 @@ write_files:
 
   # Allows add-ons running with the default service account in kube-sytem to have super-user access
   - path: /srv/kubernetes/rbac/cluster-role-bindings/system-worker.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         kind: ClusterRoleBinding
         apiVersion: rbac.authorization.k8s.io/v1beta1
         metadata:
@@ -1138,7 +1138,9 @@ write_files:
   # Associates the add-on role `kube-aws:node-extensions` to all nodes, so that
   # extra kube-aws features (like node draining) work as expected
   - path: /srv/kubernetes/rbac/cluster-role-bindings/node-extensions.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         kind: ClusterRoleBinding
         apiVersion: rbac.authorization.k8s.io/v1beta1
         metadata:
@@ -1156,7 +1158,9 @@ write_files:
 {{ if .Experimental.TLSBootstrap.Enabled }}
   # Only allows certificate signing requests to be performed with the bootstrap token
   - path: /srv/kubernetes/rbac/cluster-roles/node-bootstrapper.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         kind: ClusterRole
         apiVersion: rbac.authorization.k8s.io/v1beta1
         metadata:
@@ -1173,7 +1177,9 @@ write_files:
             - watch
 
   - path: /srv/kubernetes/rbac/cluster-role-bindings/node-bootstrapper.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         kind: ClusterRoleBinding
         apiVersion: rbac.authorization.k8s.io/v1beta1
         metadata:
@@ -1190,7 +1196,9 @@ write_files:
 {{ end }}
 
   - path: /etc/kubernetes/manifests/kube-proxy.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         apiVersion: v1
         kind: Pod
         metadata:
@@ -1228,7 +1236,9 @@ write_files:
             name: dbus
 
   - path: /etc/kubernetes/manifests/kube-apiserver.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
       apiVersion: v1
       kind: Pod
       metadata:
@@ -1358,7 +1368,9 @@ write_files:
         {{end}}
 
   - path: /etc/kubernetes/manifests/kube-controller-manager.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
       apiVersion: v1
       kind: Pod
       metadata:
@@ -1426,7 +1438,9 @@ write_files:
           name: ssl-certs-host
 
   - path: /etc/kubernetes/manifests/kube-scheduler.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
       apiVersion: v1
       kind: Pod
       metadata:
@@ -1457,7 +1471,9 @@ write_files:
 
   {{- if .Addons.Rescheduler.Enabled }}
   - path: /srv/kubernetes/manifests/kube-rescheduler-de.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
       apiVersion: extensions/v1beta1
       kind: Deployment
       metadata:
@@ -1490,7 +1506,9 @@ write_files:
   {{- end }}
 
   - path: /srv/kubernetes/manifests/kube-dns-sa.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         apiVersion: v1
         kind: ServiceAccount
         metadata:
@@ -1500,7 +1518,9 @@ write_files:
             kubernetes.io/cluster-service: "true"
 
   - path: /srv/kubernetes/manifests/kube-dns-cm.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         apiVersion: v1
         kind: ConfigMap
         metadata:
@@ -1508,7 +1528,9 @@ write_files:
           namespace: kube-system
 
   - path: /srv/kubernetes/manifests/kube-dns-autoscaler-de.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         apiVersion: extensions/v1beta1
         kind: Deployment
         metadata:
@@ -1545,7 +1567,9 @@ write_files:
                   - --v=2
 
   - path: /srv/kubernetes/manifests/kube-dns-de.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         apiVersion: extensions/v1beta1
         kind: Deployment
         metadata:
@@ -1695,7 +1719,9 @@ write_files:
               serviceAccountName: kube-dns
 
   - path: /srv/kubernetes/manifests/kube-dns-svc.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         apiVersion: v1
         kind: Service
         metadata:
@@ -1718,7 +1744,9 @@ write_files:
             protocol: TCP
 
   - path: /srv/kubernetes/manifests/heapster-de.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         apiVersion: extensions/v1beta1
         kind: Deployment
         metadata:
@@ -1796,7 +1824,9 @@ write_files:
                     - --estimator=exponential
 
   - path: /srv/kubernetes/manifests/heapster-svc.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         kind: Service
         apiVersion: v1
         metadata:
@@ -1814,7 +1844,9 @@ write_files:
             k8s-app: heapster
 
   - path: /srv/kubernetes/manifests/kube-dashboard-de.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         apiVersion: extensions/v1beta1
         kind: Deployment
         metadata:
@@ -1861,7 +1893,9 @@ write_files:
                   timeoutSeconds: 30
 
   - path: /srv/kubernetes/manifests/kube-dashboard-svc.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         apiVersion: v1
         kind: Service
         metadata:
@@ -1879,56 +1913,78 @@ write_files:
 
 {{ if .AssetsConfig.HasTLSBootstrapToken }}
   - path: /etc/kubernetes/auth/kubelet-tls-bootstrap-token.tmp{{if .AssetsEncryptionEnabled}}.enc{{end}}
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.TLSBootstrapToken}}
+    contents:
+     inline: {{.AssetsConfig.TLSBootstrapToken}}
 {{ end }}
 
 {{ if .AssetsConfig.HasAuthTokens }}
   - path: /etc/kubernetes/auth/tokens.csv.tmp{{if .AssetsEncryptionEnabled}}.enc{{end}}
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.AuthTokens}}
+    contents:
+     inline: {{.AssetsConfig.AuthTokens}}
 {{ end }}
 
 {{ if .ManageCertificates }}
   - path: /etc/kubernetes/ssl/ca.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.CACert}}
+    contents:
+     inline: {{.AssetsConfig.CACert}}
 
 {{ if .Experimental.TLSBootstrap.Enabled }}
   - path: /etc/kubernetes/ssl/ca-key.pem.enc
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.CAKey}}
+    contents:
+     inline: {{.AssetsConfig.CAKey}}
 {{ end }}
 
   - path: /etc/kubernetes/ssl/apiserver.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.APIServerCert}}
+    contents:
+     inline: {{.AssetsConfig.APIServerCert}}
 
   - path: /etc/kubernetes/ssl/apiserver-key.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.APIServerKey}}
+    contents:
+     inline: {{.AssetsConfig.APIServerKey}}
 
   - path: /etc/kubernetes/ssl/etcd-client.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.EtcdClientCert}}
+    contents:
+     inline: {{.AssetsConfig.EtcdClientCert}}
 
   - path: /etc/kubernetes/ssl/etcd-client-key.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.EtcdClientKey}}
+    contents:
+     inline: {{.AssetsConfig.EtcdClientKey}}
 
 {{ if .Experimental.Dex.Enabled }}
   - path: /etc/kubernetes/ssl/dex.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.DexCert}}
+    contents:
+     inline: {{.AssetsConfig.DexCert}}
 
   - path: /etc/kubernetes/ssl/dex-key.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.DexKey}}
+    contents:
+     inline: {{.AssetsConfig.DexKey}}
 {{ end }}
 {{ end }}
 
   - path: /etc/kubernetes/controller-kubeconfig.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         apiVersion: v1
         kind: Config
         clusters:
@@ -1946,7 +2002,9 @@ write_files:
 
 {{ if not .UseCalico }}
   - path: /etc/kubernetes/cni/net.d/10-flannel.conf
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         {
             "name": "podnet",
             "type": "flannel",
@@ -1958,7 +2016,9 @@ write_files:
 {{ else }}
 
   - path: /etc/kubernetes/cni/net.d/10-calico.conf
-    content: |
+    filesystem: root
+    contents:
+     inline: |
       {
         "name": "calico",
         "type": "flannel",
@@ -1978,25 +2038,32 @@ write_files:
 
   # http://docs.projectcalico.org/v2.0/usage/configuration/
   - path: /etc/modules-load.d/nf.conf
-    content: |
+    filesystem: root
+    contents:
+     inline: |
       nf_conntrack
   - path: /etc/sysctl.d/nf.conf
-    content: |
+    filesystem: root
+    contents:
+     inline: |
       net.netfilter.nf_conntrack_max=1000000
 
 {{ end }}
 
 {{if .Experimental.Authentication.Webhook.Enabled}}
   - path: /etc/kubernetes/webhooks/authentication.yaml
+    filesystem: root
     encoding: base64
-    content: {{ .Experimental.Authentication.Webhook.Config }}
+    contents:
+     inline: {{ .Experimental.Authentication.Webhook.Config }}
 {{ end }}
 
 {{ if .SharedPersistentVolume }}
   - path: /opt/bin/load-efs-pv
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -e
 
       docker run --rm --net=host \
@@ -2011,7 +2078,9 @@ write_files:
 {{ end }}
 {{if .Experimental.Dex.Enabled}}
   - path: /srv/kubernetes/manifests/dex-deployment.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
       apiVersion: extensions/v1beta1
       kind: Deployment
       metadata:
@@ -2068,7 +2137,9 @@ write_files:
                   memory: 50Mi
 
   - path: /srv/kubernetes/manifests/dex-cm.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
       kind: ConfigMap
       apiVersion: v1
       metadata:

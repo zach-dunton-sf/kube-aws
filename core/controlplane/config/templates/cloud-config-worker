@@ -1,57 +1,40 @@
-#cloud-config
-coreos:
-  update:
-    reboot-strategy: "off"
-  flannel:
-    interface: $private_ipv4
+locksmith:
+  reboot_strategy: "off"
+
+flannel:
+    interface: ${PRIVATE_IPV4}
     etcd_cafile: /etc/kubernetes/ssl/ca.pem
     etcd_certfile: /etc/kubernetes/ssl/etcd-client.pem
     etcd_keyfile: /etc/kubernetes/ssl/etcd-client-key.pem
 
+systemd:
   units:
 {{- range $u := .CustomSystemdUnits}}
     - name: {{$u.Name}}
-      command: {{ $u.Command }}
       {{- if $u.Enable }}
       enable: {{$u.Enable}}
       {{- end }}
-      {{- if $u.Runtime }}
-      runtime: {{$u.Runtime}}
-      {{- end }}
-      content: |
+      contents: |
         {{- range $l := $u.ContentArray}}
         {{ $l }}
         {{- end }}
 {{- end}}
 {{range $volumeMountSpecIndex, $volumeMountSpec := .VolumeMounts}}
-    - name: format-{{$volumeMountSpec.SystemdMountName}}.service
-      command: start
-      content: |
-        [Unit]
-        Description=Formats the EBS persistent volume drive for {{$volumeMountSpec.Device}}
-        Before=local-fs-pre.target
-
-        [Service]
-        Type=oneshot
-        ExecStart=-/usr/sbin/mkfs.xfs {{$volumeMountSpec.Device}}
-
-        [Install]
-        WantedBy=local-fs-pre.target
-
     - name: {{$volumeMountSpec.SystemdMountName}}.mount
-      command: start
-      content: |
+      enable: true
+      contents: |
         [Unit]
         Description=Mount volume to {{$volumeMountSpec.Path}}
 
         [Mount]
         What={{$volumeMountSpec.Device}}
         Where={{$volumeMountSpec.Path}}
+
+        [Install]
+        RequiredBy=local-fs.target
 {{end}}
     - name: cfn-etcd-environment.service
       enable: true
-      command: start
-      runtime: true
       content: |
         [Unit]
         Description=Fetches etcd static IP addresses list from CF
@@ -135,8 +118,6 @@ coreos:
             Environment="RKT_RUN_ARGS={{.FlannelImage.Options}} --uuid-file-save=/var/lib/coreos/flannel-wrapper2.uuid"
 {{end}}
     - name: kubelet.service
-      command: start
-      runtime: true
       content: |
         [Unit]
         Wants=flanneld.service cfn-etcd-environment.service
@@ -243,8 +224,6 @@ coreos:
 {{ if .NodeDrainer.Enabled }}
     - name: kube-node-drainer.service
       enable: true
-      command: start
-      runtime: true
       content: |
         [Unit]
         Description=drain this k8s node to make running pods time to gracefully shut down before stopping kubelet
@@ -282,8 +261,6 @@ coreos:
 {{if .AwsEnvironment.Enabled}}
     - name: set-aws-environment.service
       enable: true
-      command: start
-      runtime: true
       content: |
         [Unit]
         Description=Set AWS environment variables in /etc/aws-environment
@@ -300,8 +277,6 @@ coreos:
 {{if .SpotFleet.Enabled}}
     - name: tag-spot-instance.service
       enable: true
-      command: start
-      runtime: true
       content: |
         [Unit]
         Description=Tag this spot instance with cluster name
@@ -315,8 +290,6 @@ coreos:
 {{if .LoadBalancer.Enabled}}
     - name: add-to-load-balancers.service
       enable: true
-      command: start
-      runtime: true
       content: |
         [Unit]
         Description=Add this spot instance to load balancers
@@ -331,10 +304,8 @@ coreos:
 
 {{ if $.ElasticFileSystemID }}
     - name: rpc-statd.service
-      command: start
       enable: true
     - name: efs.service
-      command: start
       content: |
         [Unit]
         After=network-online.target
@@ -350,7 +321,6 @@ coreos:
 
 {{ if .WaitSignal.Enabled }}
     - name: cfn-signal.service
-      command: start
       content: |
         [Unit]
         Wants=kubelet.service docker.service
@@ -369,8 +339,6 @@ coreos:
 {{if .Experimental.AwsNodeLabels.Enabled }}
     - name: kube-node-label.service
       enable: true
-      command: start
-      runtime: true
       content: |
         [Unit]
         Description=Label this kubernetes node with additional AWS parameters
@@ -414,7 +382,6 @@ coreos:
 
 {{if .Experimental.EphemeralImageStorage.Enabled}}
     - name: format-ephemeral.service
-      command: start
       content: |
         [Unit]
         Description=Formats the ephemeral drive
@@ -427,7 +394,6 @@ coreos:
         ExecStart=/usr/sbin/wipefs -f /dev/{{.Experimental.EphemeralImageStorage.Disk}}
         ExecStart=/usr/sbin/mkfs.{{.Experimental.EphemeralImageStorage.Filesystem}} -f /dev/{{.Experimental.EphemeralImageStorage.Disk}}
     - name: var-lib-docker.mount
-      command: start
       content: |
         [Unit]
         Description=Mount ephemeral to /var/lib/docker
@@ -452,8 +418,6 @@ ssh_authorized_keys:
 {{if .Region.IsChina}}
     - name: pause-amd64.service
       enable: true
-      command: start
-      runtime: true
       content: |
         [Unit]
         Description=Pull and tag a mirror image for pause-amd64
@@ -470,20 +434,31 @@ ssh_authorized_keys:
         [Install]
         WantedBy=kubelet.service
 {{end}}
-write_files:
+storage:
+  filesystems:
+{{range $volumeMountSpecIndex, $volumeMountSpec := .VolumeMounts}}
+    - mount:
+        device: {{$volumeMountSpec.Device}}
+        format: xfs
+        create: {}
+{{end}}
+  files:
 {{- if .CustomFiles}}
   {{- range $w := .CustomFiles}}
   - path: {{$w.Path}}
+    filesystem: root
     permissions: {{$w.PermissionsString}}
     encoding: gzip+base64
-    content: {{$w.GzippedBase64Content}}
+    contents:
+     inline: {{$w.GzippedBase64Content}}
   {{- end }}
 {{- end }}
 {{if .AwsEnvironment.Enabled}}
   - path: /opt/bin/set-aws-environment
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -e
 
       rkt run \
@@ -502,9 +477,10 @@ write_files:
 {{end}}
 
   - path: /opt/bin/cfn-signal
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -e
 
       rkt run \
@@ -524,9 +500,10 @@ write_files:
       rkt rm --uuid-file=/var/run/coreos/cfn-signal.uuid || :
 
   - path: /opt/bin/cfn-etcd-environment
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -e
 
       rkt run \
@@ -546,14 +523,17 @@ write_files:
       rkt rm --uuid-file=/var/run/coreos/cfn-etcd-environment.uuid || :
 
   - path: /etc/kubernetes/cni/docker_opts_cni.env
-    content: |
+    filesystem: root
+    contents:
+     inline: |
       DOCKER_OPT_BIP=""
       DOCKER_OPT_IPMASQ=""
 
   - path: /opt/bin/host-rkt
+    filesystem: root
     permissions: 0755
-    owner: root:root
-    content: |
+    contents:
+     inline: |
       #!/bin/sh
       # This is bind mounted into the kubelet rootfs and all rkt shell-outs go
       # through this rkt wrapper. It essentially enters the host mount namespace
@@ -568,43 +548,58 @@ write_files:
 {{ if .ManageCertificates }}
 
   - path: /etc/kubernetes/ssl/etcd-client.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.EtcdClientCert}}
+    contents:
+     inline: {{.AssetsConfig.EtcdClientCert}}
 
   - path: /etc/kubernetes/ssl/etcd-client-key.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.EtcdClientKey}}
+    contents:
+     inline: {{.AssetsConfig.EtcdClientKey}}
 
 {{ if not .Experimental.TLSBootstrap.Enabled }}
   - path: /etc/kubernetes/ssl/worker.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.WorkerCert}}
+    contents:
+     inline: {{.AssetsConfig.WorkerCert}}
 
   - path: /etc/kubernetes/ssl/worker-key.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.WorkerKey}}
+    contents:
+     inline: {{.AssetsConfig.WorkerKey}}
 {{ end }}
 
   - path: /etc/kubernetes/ssl/ca.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.CACert}}
+    contents:
+     inline: {{.AssetsConfig.CACert}}
 
 {{ if .Experimental.Dex.Enabled }}
   - path: /etc/kubernetes/ssl/dex.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.DexCert}}
+    contents:
+     inline: {{.AssetsConfig.DexCert}}
 
   - path: /etc/kubernetes/ssl/dex-key.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.DexKey}}
+    contents:
+     inline: {{.AssetsConfig.DexKey}}
 {{ end }}
 {{ end }}
 
 {{ if .AssetsEncryptionEnabled }}
   - path: /opt/bin/decrypt-assets
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -e
 
       rkt run \
@@ -647,9 +642,10 @@ write_files:
 
 {{if .SpotFleet.Enabled}}
   - path: /opt/bin/tag-spot-instance
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -e
 
       instance_id=$(curl http://169.254.169.254/latest/meta-data/instance-id)
@@ -675,9 +671,10 @@ write_files:
       sudo rkt rm --uuid-file=/var/run/coreos/tag-spot-instance.uuid
 {{if .Experimental.LoadBalancer.Enabled}}
   - path: /opt/bin/add-to-load-balancers
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -e
 
       instance_id=$(curl http://169.254.169.254/latest/meta-data/instance-id)
@@ -707,7 +704,9 @@ write_files:
 {{end}}
 
   - path: /etc/kubernetes/manifests/kube-proxy.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         apiVersion: v1
         kind: Pod
         metadata:
@@ -749,7 +748,9 @@ write_files:
 
 {{ if and .Experimental.TLSBootstrap.Enabled .AssetsConfig.HasTLSBootstrapToken }}
   - path: /etc/kubernetes/worker-bootstrap-kubeconfig.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         apiVersion: v1
         kind: Config
         clusters:
@@ -769,7 +770,9 @@ write_files:
         current-context: tls-bootstrap-context
 {{ else }}
   - path: /etc/kubernetes/worker-kubeconfig.yaml
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         apiVersion: v1
         kind: Config
         clusters:
@@ -792,7 +795,9 @@ write_files:
 
 {{ if not .UseCalico }}
   - path: /etc/kubernetes/cni/net.d/10-flannel.conf
-    content: |
+    filesystem: root
+    contents:
+     inline: |
         {
             "name": "podnet",
             "type": "flannel",
@@ -804,7 +809,9 @@ write_files:
 {{ else }}
 
   - path: /etc/kubernetes/cni/net.d/10-calico.conf
-    content: |
+    filesystem: root
+    contents:
+     inline: |
       {
         "name": "calico",
         "type": "flannel",
@@ -832,16 +839,22 @@ write_files:
 
   # http://docs.projectcalico.org/v2.0/usage/configuration/
   - path: /etc/modules-load.d/nf.conf
-    content: |
+    filesystem: root
+    contents:
+     inline: |
       nf_conntrack
   - path: /etc/sysctl.d/nf.conf
-    content: |
+    filesystem: root
+    contents:
+     inline: |
       net.netfilter.nf_conntrack_max=1000000
 
 {{ end }}
 
 {{ if and .Experimental.TLSBootstrap.Enabled .AssetsConfig.HasTLSBootstrapToken }}
   - path: /etc/kubernetes/auth/kubelet-tls-bootstrap-token.tmp{{if .AssetsEncryptionEnabled}}.enc{{end}}
+    filesystem: root
     encoding: gzip+base64
-    content: {{.AssetsConfig.TLSBootstrapToken}}
+    contents:
+     inline: {{.AssetsConfig.TLSBootstrapToken}}
 {{ end }}

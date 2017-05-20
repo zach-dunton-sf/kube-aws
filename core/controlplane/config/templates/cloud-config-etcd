@@ -1,27 +1,20 @@
-#cloud-config
-coreos:
-  update:
-    reboot-strategy: "off"
+locksmith:
+    reboot_strategy: "off"
+systemd:
   units:
 {{- range $u := .Etcd.CustomSystemdUnits}}
     - name: {{$u.Name}}
-      command: {{ $u.Command }}
       {{- if $u.Enable }}
       enable: {{ $u.Enable }}
       {{- end }}
-      {{- if $u.Runtime }}
-      runtime: {{ $u.Runtime }}
-      {{- end }}
-      content: |
+      contents: |
         {{- range $l := $u.ContentArray}}
         {{ $l }}
         {{- end }}
 {{- end}}
     - name: cfn-etcd-environment.service
       enable: true
-      command: start
-      runtime: true
-      content: |
+      contents: |
         [Unit]
         Description=Configures EBS volume and R53 record set for this node and derives env vars for etcd bootstrap
         After=network-online.target
@@ -42,7 +35,7 @@ coreos:
     {{if .Etcd.DisasterRecovery.SupportsEtcdVersion .Etcd.Version -}}
     - name: etcdadm-reconfigure.service
       enable: true
-      content: |
+      contents: |
         [Unit]
         Description=etcdadm reconfigure runner
         BindsTo={{.Etcd.SystemdUnitName}}
@@ -70,7 +63,7 @@ coreos:
 
     - name: etcdadm-update-status.service
       enable: true
-      content: |
+      contents: |
         [Unit]
         Description=etcdadm update status
         BindsTo={{.Etcd.SystemdUnitName}}
@@ -92,7 +85,7 @@ coreos:
 
     - name: etcdadm-check.service
       enable: true
-      content: |
+      contents: |
         [Unit]
         Description=etcd health check
 
@@ -107,7 +100,7 @@ coreos:
     {{if .Etcd.DisasterRecovery.IsAutomatedForEtcdVersion .Etcd.Version -}}
     - name: etcdadm-check.timer
       enable: true
-      content: |
+      contents: |
         [Unit]
         Description=periodic etcd health check
 
@@ -123,7 +116,7 @@ coreos:
 
     - name: etcdadm-save.service
       enable: true
-      content: |
+      contents: |
         [Unit]
         Description=etcd snapshot
 
@@ -138,7 +131,7 @@ coreos:
     {{if .Etcd.Snapshot.IsAutomatedForEtcdVersion .Etcd.Version -}}
     - name: etcdadm-save.timer
       enable: true
-      content: |
+      contents: |
         [Unit]
         Description=periodic etcd snapshot
 
@@ -153,9 +146,9 @@ coreos:
     {{- end}}
 
     - name: {{.Etcd.SystemdUnitName}}
-      drop-ins:
+      dropins:
         - name: 20-aws-cluster.conf
-          content: |
+          contents: |
             [Unit]
             Wants=cfn-etcd-environment.service
             After=cfn-etcd-environment.service
@@ -181,16 +174,15 @@ coreos:
             ExecStartPre=/usr/bin/chown -R etcd:etcd /var/lib/etcd2
         {{if .Etcd.Version.Is3 }}
         - name: 40-version.conf
-          content: |
+          contents: |
             [Service]
             Environment="ETCD_IMAGE_TAG=v{{.Etcd.Version}}"
         {{end}}
       enable: true
-      command: start
 
     - name: var-lib-etcd2.mount
       enable: true
-      content: |
+      contents: |
         [Unit]
         Before={{.Etcd.SystemdUnitName}}
 
@@ -204,7 +196,7 @@ coreos:
 
     - name: format-etcd2-volume.service
       enable: true
-      content: |
+      contents: |
         [Unit]
         Description=Formats etcd2 ebs volume
         After=dev-xvdf.device
@@ -222,7 +214,7 @@ coreos:
 {{if .AssetsEncryptionEnabled}}
     - name: decrypt-assets.service
       enable: true
-      content: |
+      contents: |
         [Unit]
         Description=decrypt etcd2 tls assets using amazon kms
         Before={{.Etcd.SystemdUnitName}}
@@ -260,8 +252,7 @@ coreos:
 
 {{ if .WaitSignal.Enabled }}
     - name: cfn-signal.service
-      command: start
-      content: |
+      contents: |
         [Unit]
         Wants={{.Etcd.SystemdUnitName}}
         After={{.Etcd.SystemdUnitName}}
@@ -278,33 +269,41 @@ coreos:
 {{end}}
 
 {{if .SSHAuthorizedKeys}}
-ssh_authorized_keys:
+passwd:
+  users:
+    - name: core
+      ssh_authorized_keys:
   {{range $sshkey := .SSHAuthorizedKeys}}
-  - {{$sshkey}}
+        - {{$sshkey}}
   {{end}}
 {{end}}
 
-write_files:
+storage:
+  files:
 {{- if .Etcd.CustomFiles}}
   {{- range $w := .Etcd.CustomFiles}}
   - path: {{$w.Path}}
+    filesystem: root
     permissions: {{$w.PermissionsString}}
     encoding: gzip+base64
-    content: {{$w.GzippedBase64Content}}
+    contents:
+     inline: {{$w.GzippedBase64Content}}
   {{- end }}
 {{- end }}
   - path: /opt/bin/cfn-init-etcd-server
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -vxe
 
       cfn-init -v -c "etcd-server" --region {{.Region}} --resource {{.Etcd.LogicalName}}${{.EtcdIndexEnvVarName}} --stack ${{.StackNameEnvVarName}}
 
   - path: /opt/bin/attach-etcd-volume
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -vxe
 
       # To omit the `--region {{.Region}}` flag for every aws-cli invocation
@@ -397,9 +396,10 @@ write_files:
 
   {{if $.Etcd.NodeShouldHaveSecondaryENI -}}
   - path: /opt/bin/assume-advertised-hostname-with-eni
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -vxe
 
       # To omit the `--region {{.Region}}` flag for every aws-cli invocation
@@ -460,9 +460,10 @@ write_files:
         > /var/run/coreos/listen-private-ip
 
   - path: /opt/bin/reconfigure-ip-routing
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -vxe
 
       # Reconfigure ip routes and rules so that etcd can communicate via the newly attached ENI
@@ -511,9 +512,10 @@ write_files:
 
   {{if $.Etcd.NodeShouldHaveEIP -}}
   - path: /opt/bin/assume-advertised-hostname-with-eip
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -vxe
 
       # To omit the `--region {{.Region}}` flag for every aws-cli invocation
@@ -530,9 +532,10 @@ write_files:
   {{- end }}
 
   - path: /opt/bin/append-etcd-server-env
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -vxe
 
       private_ip=$(cat /var/run/coreos/listen-private-ip)
@@ -558,9 +561,10 @@ write_files:
       ETCD_INITIAL_ADVERTISE_PEER_URLS=https://$advertised_hostname:2380" >> /var/run/coreos/etcd-environment
 
   - path: /opt/bin/cfn-etcd-environment
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -e
 
       run() {
@@ -600,13 +604,17 @@ write_files:
       /usr/bin/sed -i "s/^ETCDCTL_ENDPOINT.*$/ETCDCTL_ENDPOINT=https:\/\/$(cat /var/run/coreos/advertised-hostname):2379/" /etc/environment
 
   - path: /opt/bin/etcdadm
+    filesystem: root
     permissions: 0755
     encoding: gzip+base64
-    content: {{.Etcdadm}}
+    contents:
+     inline: {{.Etcdadm}}
 
   - path: /etc/environment
+    filesystem: root
     permissions: 0644
-    content: |
+    contents:
+     inline: |
       COREOS_PUBLIC_IPV4=$public_ipv4
       COREOS_PRIVATE_IPV4=$private_ipv4
       ETCDCTL_CA_FILE=/etc/ssl/certs/ca.pem
@@ -615,9 +623,10 @@ write_files:
       ETCDCTL_ENDPOINT=
 
   - path: /opt/bin/ext4-format-volume-once
+    filesystem: root
     permissions: 0700
-    owner: root:root
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -e
       if [[ "$(wipefs -n -p $1 | grep ext4)" == "" ]];then
         mkfs.ext4 $1
@@ -627,9 +636,10 @@ write_files:
 
 {{ if .WaitSignal.Enabled }}
   - path: /opt/bin/cfn-signal
-    owner: root:root
+    filesystem: root
     permissions: 0700
-    content: |
+    contents:
+     inline: |
       #!/bin/bash -e
 
       rkt run \
@@ -655,22 +665,27 @@ write_files:
 
   - path: /etc/ssl/certs/ca.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
     encoding: gzip+base64
-    content: {{.AssetsConfig.CACert}}
+    contents:
+     inline: {{.AssetsConfig.CACert}}
 
   - path: /etc/ssl/certs/etcd-key.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
     encoding: gzip+base64
-    content: {{.AssetsConfig.EtcdKey}}
+    contents:
+     inline: {{.AssetsConfig.EtcdKey}}
 
   - path: /etc/ssl/certs/etcd.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
     encoding: gzip+base64
-    content: {{.AssetsConfig.EtcdCert}}
+    contents:
+     inline: {{.AssetsConfig.EtcdCert}}
 
   - path: /etc/ssl/certs/etcd-client.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
     encoding: gzip+base64
-    content: {{.AssetsConfig.EtcdClientCert}}
+    contents:
+     inline: {{.AssetsConfig.EtcdClientCert}}
 
   - path: /etc/ssl/certs/etcd-client-key.pem{{if .AssetsEncryptionEnabled}}.enc{{end}}
     encoding: gzip+base64
-    content: {{.AssetsConfig.EtcdClientKey}}
+    contents:
+     inline: {{.AssetsConfig.EtcdClientKey}}
 
 {{ end }}
