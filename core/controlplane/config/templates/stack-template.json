@@ -693,22 +693,12 @@
         ],
         "PlacementTenancy": "{{$.Etcd.Tenancy}}",
         "UserData": { "Fn::Base64": { "Fn::Join" : ["\n", [
-          "#!/bin/bash -xe",
-          {"Fn::Join":["",[ "echo '{{$.StackNameEnvVarName}}=", { "Ref": "AWS::StackName" }, "' >> {{$.EtcdNodeEnvFileName}}" ]]},
-          "echo '{{$.EtcdIndexEnvVarName}}={{$etcdIndex}}' >> {{$.EtcdNodeEnvFileName}}",
-          " . /etc/environment",
-          "export COREOS_PRIVATE_IPV4 COREOS_PRIVATE_IPV6 COREOS_PUBLIC_IPV4 COREOS_PUBLIC_IPV6",
-          "REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r '.region')",
-          "USERDATA_FILE={{$.UserDataEtcdFileName}}",
-          "while ! /usr/bin/rkt run \\",
-          "   --net=host \\",
-          "   --volume=dns,kind=host,source=/etc/resolv.conf,readOnly=true --mount volume=dns,target=/etc/resolv.conf  \\",
-          "   --volume=awsenv,kind=host,source=/var/run/coreos,readOnly=false --mount volume=awsenv,target=/var/run/coreos \\",
-          "   --trust-keys-from-https \\",
-          "   {{$.AWSCliImage.Options}}{{$.AWSCliImage.RktRepo}} --exec=aws -- s3 --region $REGION  cp {{ $.UserDataEtcdS3URI }} /var/run/coreos/$USERDATA_FILE; do",
-          "sleep 1",
-          "done",
-          "exec /usr/bin/coreos-cloudinit --from-file /var/run/coreos/$USERDATA_FILE"
+            "{ \"ignition\": {",
+            "    \"version\": \"2.0.0\", ",
+            "    \"config\": {",
+            "      \"replace\": {",
+            "        \"source\": \"{{$UserDataEtcdS3URI}}\"",
+            "}}}}"
         ]]}}
       },
       "Type": "AWS::AutoScaling::LaunchConfiguration"
@@ -746,21 +736,13 @@
         ],
         "PlacementTenancy": "{{ .Controller.Tenancy }}",
         "UserData": { "Fn::Base64": { "Fn::Join" : ["\n", [
-		"#!/bin/bash -xe",
-		" . /etc/environment",
-                "export COREOS_PRIVATE_IPV4 COREOS_PRIVATE_IPV6 COREOS_PUBLIC_IPV4 COREOS_PUBLIC_IPV6",
-	        "REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r '.region')",
-		"USERDATA_FILE={{.UserDataControllerFileName}}",
-		"while ! /usr/bin/rkt run \\",
-		"   --net=host \\",
-		"   --volume=dns,kind=host,source=/etc/resolv.conf,readOnly=true --mount volume=dns,target=/etc/resolv.conf  \\",
-		"   --volume=awsenv,kind=host,source=/var/run/coreos,readOnly=false --mount volume=awsenv,target=/var/run/coreos \\",
-   		"   --trust-keys-from-https \\",
-		"   {{.AWSCliImage.Options}}{{.AWSCliImage.RktRepo}} --exec=aws -- s3 --region $REGION  cp {{ .UserDataControllerS3URI }} /var/run/coreos/$USERDATA_FILE; do",
-                "sleep 1",
-                "done",
-		"exec /usr/bin/coreos-cloudinit --from-file /var/run/coreos/$USERDATA_FILE"
-			]]}}
+            "{ \"ignition\": {",
+            "    \"version\": \"2.0.0\", ",
+            "    \"config\": {",
+            "      \"replace\": {",
+            "        \"source\": \"{{$UserDataControllerS3URI}}\"",
+            "}}}}"
+        ]]}}
       },
   {{ if .Experimental.AwsEnvironment.Enabled }}
       "Metadata" : {
