@@ -1,8 +1,9 @@
+{{ define "userdata" }}
 locksmith:
   reboot_strategy: "off"
 
 flannel:
-    interface: ${PRIVATE_IPV4}
+    interface: "{PRIVATE_IPV4}"
     etcd_cafile: /etc/kubernetes/ssl/ca.pem
     etcd_certfile: /etc/kubernetes/ssl/etcd-client.pem
     etcd_keyfile: /etc/kubernetes/ssl/etcd-client-key.pem
@@ -858,3 +859,4 @@ storage:
     contents:
      inline: {{.AssetsConfig.TLSBootstrapToken}}
 {{ end }}
+{{end}}
