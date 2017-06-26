@@ -190,6 +190,19 @@
                   "Effect": "Allow",
                   "Resource": "*"
                 },
+                {{if .CloudWatchLogging.Enabled}}
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogStreams"
+                  ],
+                  "Resource": [
+                    { "Ref": "CloudWatchLogGroupARN" },
+                    { "Fn::Join" : [ "", [{ "Ref": "CloudWatchLogGroupARN" }, ":log-stream:*"]] }
+                  ]
+                },{{ end }}
                 {{ if .UserDataController.Parts.s3 }}
 		            {
                   "Effect": "Allow",

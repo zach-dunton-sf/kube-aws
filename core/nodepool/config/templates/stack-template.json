@@ -326,7 +326,8 @@
                     { "Ref": "CloudWatchLogGroupARN" },
                     { "Fn::Join" : [ "", [{ "Ref": "CloudWatchLogGroupARN" }, ":log-stream:*"]] }
                   ]
-                },{{ end }}
+                },
+                {{ end }}
                 {{ if .KubeResourcesAutosave.Enabled }}
                 {
                   "Effect": "Allow",
