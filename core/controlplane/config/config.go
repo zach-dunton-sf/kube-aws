@@ -115,7 +115,6 @@ func NewDefaultCluster() *Cluster {
 			ManageCertificates: true,
 			CloudWatchLogging: CloudWatchLogging{
 				Enabled:         false,
-				ImageWithTag:    "jollinshead/journald-cloudwatch-logs:0.1",
 				RetentionInDays: 7,
 			},
 			HyperkubeImage:                     model.Image{Repo: "quay.io/coreos/hyperkube", Tag: k8sVer, RktPullDocker: false},
@@ -137,6 +136,7 @@ func NewDefaultCluster() *Cluster {
 			PauseImage:                         model.Image{Repo: "gcr.io/google_containers/pause-amd64", Tag: "3.0", RktPullDocker: false},
 			FlannelImage:                       model.Image{Repo: "quay.io/coreos/flannel", Tag: "v0.7.1", RktPullDocker: false},
 			DexImage:                           model.Image{Repo: "quay.io/coreos/dex", Tag: "v2.4.1", RktPullDocker: false},
+			JournaldCloudWatchLogsImage:        model.Image{Repo: "jollinshead/journald-cloudwatch-logs", Tag: "0.1", RktPullDocker: true},
 		},
 		KubeClusterSettings: KubeClusterSettings{
 			DNSServiceIP: "10.3.0.10",
@@ -512,6 +512,7 @@ type DeploymentSettings struct {
 	PauseImage                         model.Image `yaml:"pauseImage,omitempty"`
 	FlannelImage                       model.Image `yaml:"flannelImage,omitempty"`
 	DexImage                           model.Image `yaml:"dexImage,omitempty"`
+	JournaldCloudWatchLogsImage        model.Image `yaml:"journaldCloudWatchLogsImage,omitempty"`
 }
 
 // Part of configuration which is specific to worker nodes
@@ -749,9 +750,8 @@ type KubeResourcesAutosave struct {
 }
 
 type CloudWatchLogging struct {
-	Enabled         bool   `yaml:"enabled"`
-	ImageWithTag    string `yaml:"imageWithTag"`
-	RetentionInDays int    `yaml:"retentionInDays"`
+	Enabled         bool `yaml:"enabled"`
+	RetentionInDays int  `yaml:"retentionInDays"`
 }
 
 type LoadBalancer struct {

@@ -1077,6 +1077,12 @@ worker:
 #  tag: v0.7.1
 #  rktPullDocker: false
 
+# JournaldCloudWatchLogsImage image repository to use. This sends journald logs to CloudWatch.
+#journaldCloudWatchLogsImage:
+#  repo: "jollinshead/journald-cloudwatch-logs"
+#  tag: "0.1"
+#  rktPullDocker: true
+
 # Use Calico for network policy.
 # useCalico: false
 
@@ -1128,7 +1134,6 @@ worker:
 # It is disabled by default.
 #cloudWatchLogging:
 # enabled: false
-# imageWithTag: jollinshead/journald-cloudwatch-logs:0.1
 # retentionInDays: 7
 
 # Addon features

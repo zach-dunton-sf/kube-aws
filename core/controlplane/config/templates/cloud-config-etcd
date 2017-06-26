@@ -94,7 +94,7 @@ coreos:
                   --mount volume=journal,target=/var/log/journal \
                   --volume machine-id,kind=host,source=/etc/machine-id,readOnly=true \
                   --mount volume=machine-id,target=/etc/machine-id \
-                  docker://{{.CloudWatchLogging.ImageWithTag}} -- {{.ClusterName}}
+                  {{ .JournaldCloudWatchLogsImage.RktRepo }} -- {{.ClusterName}}
         Restart=always
         RestartSec=60s
 
