@@ -1,7 +1,6 @@
 package ec2
 
 import (
-	"encoding/json"
 	re "regexp"
 	"fmt"
 )
@@ -12,27 +11,41 @@ type AvailabilityZone string
 
 
 type IAMRoleName string
-func (v *IAMRoleName) UnmarshalJSON(data []byte) error {
-	if !re.MustCompile(`[\w+=,.@-]+`).Match(data) {
-		return fmt.Errorf("Impossible IAMRoleName '%s'", string(data))
+func (v *IAMRoleName) UnmarshalYAML(f func(interface{}) error) error {
+	var data string
+	if err := f(&data); err != nil {
+		return err
 	}
-	return json.Unmarshall(data, v)
+
+	if !re.MustCompile(`^[\w+=,.@-]+$`).MatchString(data) {
+		return fmt.Errorf("Impossible IAMRoleName '%s'", data)
+	}
+
+	*v = IAMRoleName(data)
+	return nil
 }
 
-
 type ELBName string
-func (v *ELBName) UnmarshalJSON(data []byte) error {
-	// This name must be unique within your set of load balancers for the region, must have a maximum of 32 characters, must contain only alphanumeric characters or hyphens, and cannot begin or end with a hyphen.
-	if !re.MustCompile(`[\w-]{1,32}`).Match(data) {
-		return fmt.Errorf("Impossible ELBName '%s'", string(data))
+func (v *ELBName) UnmarshalYAML(f func(interface{}) error) error {
+	var data string
+	if err := f(&data); err != nil {
+		return err
 	}
-	return json.Unmarshall(data, v)
+
+	if !re.MustCompile(`^[^-][\w-]{1,30}[^-]$`).MatchString(data) {
+		return fmt.Errorf("Impossible ELBName '%s'", data)
+	}
+
+	*v = ELBName(data)
+	return nil
 }
 
 type SubnetName string
 type SecurityGroupId string
 type IAMPolicyARN string
 type InstanceProfileARN string
+type ALBTargetGroupARN string
+type KMSKeyARN string
 
 type Timeout string //PT15M
 type InstanceType string //enum?
@@ -42,12 +55,15 @@ type InstanceTenancy string
 type SSHKeyPairName string
 type HostedZoneId string
 
+type AmiId string
 type EFSId string
 type VPCId string
 type IGWId string
 type SubnetId string
 type RouteTableId string
 type NGWId string
+type EIPAllocId string
+
 type StackName string
 
 

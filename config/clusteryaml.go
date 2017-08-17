@@ -1,9 +1,12 @@
-package model
+package config
 
 import (
 	"github.com/kubernetes-incubator/kube-aws-ng/types/ec2"
-	k8stypes "github.com/kubernetes-incubator/kube-aws-ng/types/kubernetes"
+	"github.com/kubernetes-incubator/kube-aws-ng/types/kubernetes"
 	"github.com/kubernetes-incubator/kube-aws-ng/types/coreos"
+	"github.com/kubernetes-incubator/kube-aws-ng/types/dex"
+	"github.com/kubernetes-incubator/kube-aws-ng/types"
+	"github.com/kubernetes-incubator/kube-aws-ng/model"
 	"net"
 	"net/url"
 )
@@ -56,7 +59,7 @@ type APIEndpointConf struct {
 	Name APIEndpointName
 	DnsName types.DNSName
 
-	LoadBalancer APIEndpointLoadbalancer
+	LoadBalancer APIEndpointLoadBalancer
 }
 
 type ASGConf struct {
@@ -99,7 +102,7 @@ type ControllerConf struct {
 	AutoScalingGroup ASGConf
 	IAM IAMConf
 	Subnets []SubnetConfRef
-	NodeLabels map[k8stypes.LabelName]k8stypes.LabelValue
+	NodeLabels map[kubernetes.LabelName]kubernetes.LabelValue
 	CustomFiles []map[string]string
 	CustomSystemdUnits []map[string]string
 }
@@ -144,7 +147,7 @@ type KubernetesContainerImages struct {
 	ContainerImages
 }
 
-type WaitSignal struct {
+type WaitSignalConf struct {
 	Enabled bool
 	MaxBatchSize uint //validate: >0
 }
@@ -152,7 +155,7 @@ type WaitSignal struct {
 type NodepoolConf struct {
 	Name NodePoolName
 	Subnets []SubnetConfRef
-	SecurityGroupIds []ec2.SecurityGroup
+	SecurityGroupIds []ec2.SecurityGroupId
 	LoadBalancer struct {
 		Enabled bool
 		Names []ec2.ELBName
@@ -167,7 +170,7 @@ type NodepoolConf struct {
 	}
 	ManagedIamRoleSuffix ec2.IAMRoleName `yaml:mangedIamRoleName`
 	VolumeMounts []VolumeMountConf
-	NodeStatusUpdateFrequency k8stypes.TimePeriod // 10s, 5h
+	NodeStatusUpdateFrequency kubernetes.TimePeriod // 10s, 5h
 	Count uint
 	InstanceType ec2.InstanceType
 	RootVolume VolumeConf
@@ -187,13 +190,13 @@ type NodepoolConf struct {
 	ElasticFileSystemId ec2.EFSId
 	EphemeralImageStorage struct {Enabled bool}
 	Kube2IamSupport struct {Enabled bool}
-	KubeletOpts k8stypes.KubeletOptionsString
+	KubeletOpts kubernetes.KubeletOptionsString
 
-	NodeLabels map[k8stypes.LabelName]k8stypes.LabelValue
+	NodeLabels map[kubernetes.LabelName]kubernetes.LabelValue
 	Taints []struct {
-		Key k8stypes.TaintKey
-		Value k8stypes.TaintValue
-		Effect k8stypes.TaintEffect
+		Key kubernetes.TaintKey
+		Value kubernetes.TaintValue
+		Effect kubernetes.TaintEffect
 	}
 	KeyName ec2.SSHKeyPairName
 	ReleaseChannel coreos.ReleaseChannel
@@ -210,9 +213,9 @@ type EtcdConf struct {
 	InstanceType ec2.InstanceType
 	RootVolume VolumeConf
 	DataVolume MaybeEncryptedOrEphemeralVolume
-	Tenancy ec2.Tenancy
+	Tenancy ec2.InstanceTenancy
 	Subnets []SubnetConfRef
-	SecurityGroupIds []ec2.SecurityGroup
+	SecurityGroupIds []ec2.SecurityGroupId
 	IAM IAMConf
 
 	Version types.EtcdVersion
@@ -279,7 +282,7 @@ type CloudWatchLoggingConf struct {
 	}
 }
 
-type AmazonSSMAgent struct {
+type AmazonSSMAgentConf struct {
 	Enabled bool
 	DownloadURL url.URL
 	Sha1Sum types.SHA1SUM
@@ -297,12 +300,12 @@ type ExperimentalAddonsConf struct {
 		denyEscalatingExec struct {Enabled bool}
 	}
 
-	AwsEnvironment EtcAwsEnvironment // q:found bare in nodepool, does it mean rest of experimental can be found there too?
+	AwsEnvironment EtcAwsEnvironmentConf // q:found bare in nodepool, does it mean rest of experimental can be found there too?
 	AuditLog AuditLogConf
 	Authentication struct {
 		Webhook struct {
 			Enabled bool
-			cacheTTL k8stypes.Time
+			cacheTTL kubernetes.TimePeriod
 			configBase64 types.Base64Yaml
 		}
 	}
@@ -336,7 +339,7 @@ type AddonsConf struct {
 		Rbac struct{Enabled bool}
 	}
 	DisableSecurityGroupIngress bool
-	NodeMonitorGracePeriod k8stypes.Time
+	NodeMonitorGracePeriod kubernetes.TimePeriod
 }
 
 type ClusterYAML struct {
