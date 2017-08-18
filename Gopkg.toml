@@ -1,0 +1,6 @@
+required = ["github.com/clipperhouse/gen"]
+
+[[constraint]]
+  name = "github.com/clipperhouse/gen"
+  branch = "master"
+

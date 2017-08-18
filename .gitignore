@@ -1,0 +1,3 @@
+gen
+kube-aws
+*_regex.go

@@ -10,4 +10,3 @@ type TaintValue string
 type TaintEffect string
 
 type KubeletOptionsString string
-

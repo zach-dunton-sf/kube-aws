@@ -1,14 +1,14 @@
 package main
 
 import (
-	"path/filepath"
+	"fmt"
+	"github.com/kubernetes-incubator/kube-aws-ng/config"
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 	"gopkg.in/yaml.v2"
-        "os"
-	"net/url"
-	"fmt"
 	"io/ioutil"
-	"github.com/kubernetes-incubator/kube-aws-ng/config"
+	"net/url"
+	"os"
+	"path/filepath"
 	//"github.com/kubernetes-incubator/kube-aws-ng/update"
 )
 

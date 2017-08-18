@@ -5,14 +5,12 @@ type DNSName string
 type NvidiaDriverVersion string
 type SSHAuthorizedKey string
 
-
 type BlockDeviceName string
 type FilesystemPath string
 
-
 type EtcdVersion string
 type EtcdMemberIdentityProvider string //enum: eni, eip
-type EtcdMemberIdentifier string //validate: can't have '='
+type EtcdMemberIdentifier string       //validate: can't have '='
 
 type ContainerRuntime string //enum: docker, rkt
 

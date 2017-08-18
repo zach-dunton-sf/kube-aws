@@ -1,71 +1,61 @@
 package ec2
 
 import (
-	re "regexp"
-	"fmt"
 )
-
 
 type Region string
 type AvailabilityZone string
 
-
+// +gen * regex
 type IAMRoleName string
-func (v *IAMRoleName) UnmarshalYAML(f func(interface{}) error) error {
-	var data string
-	if err := f(&data); err != nil {
-		return err
-	}
+const IAMRoleName_regex = `^[\w+=,.@-]+$`
 
-	if !re.MustCompile(`^[\w+=,.@-]+$`).MatchString(data) {
-		return fmt.Errorf("Impossible IAMRoleName '%s'", data)
-	}
-
-	*v = IAMRoleName(data)
-	return nil
-}
-
+// +gen * regex
 type ELBName string
-func (v *ELBName) UnmarshalYAML(f func(interface{}) error) error {
-	var data string
-	if err := f(&data); err != nil {
-		return err
-	}
-
-	if !re.MustCompile(`^[^-][\w-]{1,30}[^-]$`).MatchString(data) {
-		return fmt.Errorf("Impossible ELBName '%s'", data)
-	}
-
-	*v = ELBName(data)
-	return nil
-}
+const ELBName_regex = `^[^-][\w-]{1,30}[^-]$`
 
 type SubnetName string
+
+// +gen * regex
 type SecurityGroupId string
+const SecurityGroupId_regex = `^sg-[0-9a-z]{8}$`
+
 type IAMPolicyARN string
 type InstanceProfileARN string
 type ALBTargetGroupARN string
 type KMSKeyARN string
 
-type Timeout string //PT15M
+// +gen * regex
+type Timeout string      //PT15M
+const Timeout_regex = `^PT(?:\d+H)?(?:\d+M)?(?:\d+S)?$`
+
 type InstanceType string //enum?
-type VolumeType string //enum?
+type VolumeType string   //enum?
 type InstanceTenancy string
 
 type SSHKeyPairName string
 type HostedZoneId string
 
+// +gen * regex
 type AmiId string
+const AmiId_regex = `^ami-[0-9a-z]{8}$`
+
 type EFSId string
 type VPCId string
 type IGWId string
+
+// +gen * regex
 type SubnetId string
+const SubnetId_regex = `^subnet-[0-9a-z]{8}$`
+
+// +gen * regex
 type RouteTableId string
+const RouteTableId_regex = `^rtb-[0-9a-z]{8}$`
+
 type NGWId string
 type EIPAllocId string
 
 type StackName string
-
 
 type TagName string
 type TagValue string
