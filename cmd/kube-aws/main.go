@@ -20,7 +20,7 @@ func updateCommand(s3 *url.URL) int {
 	}
 
 	var clusterYAML config.ClusterYAML
-	if err := yaml.Unmarshal(data, &clusterYAML); err != nil {
+	if err := yaml.UnmarshalStrict(data, &clusterYAML); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
