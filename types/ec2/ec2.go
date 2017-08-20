@@ -18,7 +18,7 @@ type SubnetName string
 
 // +gen * regex
 type SecurityGroupId string
-const SecurityGroupId_regex = `^sg-[0-9a-z]{8}$`
+const SecurityGroupId_regex = `^sg-[0-9a-f]{8}$`
 
 type IAMPolicyARN string
 type InstanceProfileARN string
@@ -38,19 +38,25 @@ type HostedZoneId string
 
 // +gen * regex
 type AmiId string
-const AmiId_regex = `^ami-[0-9a-z]{8}$`
+const AmiId_regex = `^ami-[0-9a-f]{8}$`
 
 type EFSId string
+
+// +gen * regex
 type VPCId string
+const VPCId_regex = `^vpc-[0-9a-f]{8}$`
+
+// +gen * regex
 type IGWId string
+const IGWId_regex = `^igw-[0-9a-f]{8}$`
 
 // +gen * regex
 type SubnetId string
-const SubnetId_regex = `^subnet-[0-9a-z]{8}$`
+const SubnetId_regex = `^subnet-[0-9a-f]{8}$`
 
 // +gen * regex
 type RouteTableId string
-const RouteTableId_regex = `^rtb-[0-9a-z]{8}$`
+const RouteTableId_regex = `^rtb-[0-9a-f]{8}$`
 
 type NGWId string
 type EIPAllocId string
