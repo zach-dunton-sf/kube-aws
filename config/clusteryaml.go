@@ -56,51 +56,51 @@ type APIEndpointLoadBalancer struct { // need invariants generator
 type APIEndpointName string
 
 type APIEndpointConf struct {
-	Name    APIEndpointName
-	DnsName types.DNSName
+	Name    APIEndpointName `yaml:"name"`
+	DnsName types.DNSName `yaml:"dnsName"`
 
-	LoadBalancer APIEndpointLoadBalancer
+	LoadBalancer APIEndpointLoadBalancer `yaml:"loadBalancer"`
 }
 
 type ASGConf struct {
-	MinSize                            uint
-	MaxSize                            uint
-	RollingUpdateMinInstancesInService uint
+	MinSize                            uint `yaml:"minSize"`
+	MaxSize                            uint `yaml:"maxSize"`
+	RollingUpdateMinInstancesInService uint `yaml:"rollingUpdateMinInstancesInService"`
 }
 
 type IAMConf struct {
 	Role struct {
-		ManagedPolicies []ec2.IAMPolicyARN
-		InstanceProfile ec2.InstanceProfileARN
-	}
+		ManagedPolicies []ec2.IAMPolicyARN  `yaml:"managedPolicies"`
+		InstanceProfile ec2.InstanceProfileARN `yaml:"instanceProfile"`
+	} `yaml:"role"`
 }
 
 type VolumeConf struct {
-	Size uint
-	Type ec2.VolumeType
-	Iops uint
+	Size uint `yaml:"size"`
+	Type ec2.VolumeType `yaml:"type"`
+	Iops uint `yaml:"iops"`
 }
 
 type VolumeMountConf struct {
 	VolumeConf
-	Device types.BlockDeviceName
-	Path   types.FilesystemPath
+	Device types.BlockDeviceName `yaml:"device"`
+	Path   types.FilesystemPath `yaml:"path"`
 }
 
 type MaybeEncryptedOrEphemeralVolume struct {
 	VolumeConf
-	Encrypted bool // conflicts: Ephemeral
-	Ephemeral bool // conflicts: Encrypted, broken
+	Encrypted bool `yaml:encrypted` // conflicts: Ephemeral
+	Ephemeral bool `yaml:ephemeral` // conflicts: Encrypted, broken
 }
 
 type InstanceCommonDescrEmbed struct {
-	Count              uint
-	CreateTimeout      ec2.Timeout
-	InstanceType       ec2.InstanceType
-	Tenancy                   ec2.InstanceTenancy  //new for Controller
-	RootVolume         VolumeConf //validate: must be empty/default device and path
-	SecurityGroupIds   []ec2.SecurityGroupId
-	IAM                IAMConf
+	Count              uint `yaml:"count"`
+	CreateTimeout      ec2.Timeout `yaml:"createTimeout"`
+	InstanceType       ec2.InstanceType `yaml:"instanceType"`
+	Tenancy                   ec2.InstanceTenancy `yaml:"tenancy"` //new for Controller
+	RootVolume         VolumeConf `yaml:rootVolume` //validate: must be empty/default device and path
+	SecurityGroupIds   []ec2.SecurityGroupId `yaml:SecurityGroupIds`
+	IAM                IAMConf `yaml:"iam"`
 	Subnets            []SubnetConfRef
 	CustomFiles        []map[string]string
 	CustomSystemdUnits []map[string]string
@@ -111,7 +111,7 @@ type InstanceCommonDescrEmbed struct {
 }
 
 type ControllerConf struct {
-	InstanceCommonDescrEmbed `yaml:inline`
+	InstanceCommonDescrEmbed
 	NodeLabels         map[kubernetes.LabelName]kubernetes.LabelValue
 	AutoScalingGroup   ASGConf
 }
@@ -148,7 +148,7 @@ type ContainerImages struct {
 	PauseImage                         model.Image `yaml:"omitempty"`
 	FlannelImage                       model.Image `yaml:"omitempty"`
 	DexImage                           model.Image `yaml:"omitempty"`
-	JournaldCloudWatchLogsImage        model.Image `yaml:"omitempty"`
+	JournaldCloudWatchLogsImage        model.Image `yaml:"journaldCloudWatchLogsImage,omitempty"`
 }
 
 type KubernetesContainerImages struct {
@@ -157,12 +157,12 @@ type KubernetesContainerImages struct {
 }
 
 type WaitSignalConf struct {
-	Enabled      bool
-	MaxBatchSize uint //validate: >0
+	Enabled      bool 
+	MaxBatchSize uint `yaml:"maxBatchSize"`//validate: >0
 }
 
 type NodepoolConf struct {
-	InstanceCommonDescrEmbed `yaml:inline`
+	InstanceCommonDescrEmbed `yaml:,inline`
 	Name             NodePoolName
 	LoadBalancer     struct {
 		Enabled bool
@@ -226,7 +226,7 @@ type EtcdConf struct {
 type AutoScalingConf struct {
 	ClusterAutoScaler struct {
 		Enabled bool
-	}
+	} `yaml:clusterAutoScaler`
 }
 
 type EtcAwsEnvironmentConf struct {
@@ -238,18 +238,18 @@ type VPCConf struct {
 	//VpcId ec2.VPCId -- removed as deprecated
 	Vpc struct {
 		Id                ec2.VPCId     //conflicts: IdFromStackOutput
-		IdFromStackOutput ec2.StackName //conflicts: Id;
+		IdFromStackOutput ec2.StackName `yaml:idFromStackOutput` //conflicts: Id;
 		//InternetGatewayId ec2.IGWId -- removed as deprecated
-	}
+	} `yaml:vpc`
 
 	InternetGateway struct {
 		Id                ec2.IGWId     //conflicts: IdFromStackOutput
-		IdFromStackOutput ec2.StackName //conflicts: Id
+		IdFromStackOutput ec2.StackName `yaml:idFromStackOutput` //conflicts: Id
 	}
 
 	// RouteTableId ec2.RouteTableId -- removed in favour of subnets[].routeTable.id
 
-	VpcCIDR net.IPNet //future: should be conflicting with vpcID
+	VpcCIDR net.IPNet `yaml:vpcCIDR` //future: should be conflicting with vpcID
 	//InstanceCIDR net.IPNet // -- reomved in favour of nodepools[] and subnets[]
 
 	Subnets []SubnetConf
@@ -262,12 +262,12 @@ type TLSConf struct {
 
 type CloudWatchLoggingConf struct {
 	Enabled         bool
-	RetentionInDays uint
+	RetentionInDays uint `yaml:retentionInDays`
 	LocalStreaming  struct {
 		Enabled  bool
 		Filter   string
 		Interval uint
-	}
+	} `yaml:localStreaming`
 }
 
 type AmazonSSMAgentConf struct {
@@ -278,8 +278,8 @@ type AmazonSSMAgentConf struct {
 
 type AuditLogConf struct {
 	Enabled bool
-	MaxAge  uint
-	LogPath string
+	MaxAge  uint `yaml:maxAge`
+	LogPath string `yaml:logPath`
 }
 
 type ExperimentalAddonsConf struct {
@@ -335,26 +335,26 @@ type ClusterYAML struct {
 	ReleaseChannel coreos.ReleaseChannel `yaml:"releaseChannel"`
 
 	AmiId                       ec2.AmiId `yaml:"amiId"`
-	HostedZoneId                ec2.HostedZoneId
-	SshAccessAllowedSourceCIDRs []net.IPNet
+	HostedZoneId                ec2.HostedZoneId `yaml:"hostedZoneId"`
+	SshAccessAllowedSourceCIDRs []net.IPNet `yaml:"sshAccessAllowedSourceCIDRs"`
 
-	AdminAPIEndpointName APIEndpointName
-	ApiEndpoints         []APIEndpointConf
+	AdminAPIEndpointName APIEndpointName `yaml:"adminAPIEndpointName"`
+	ApiEndpoints         []APIEndpointConf `yaml:"apiEndpoints"`
 
-	KeyName           ec2.SSHKeyPairName
-	SSHAuthorizedKeys []types.SSHAuthorizedKey
+	KeyName           ec2.SSHKeyPairName `yaml:"keyName"`
+	SSHAuthorizedKeys []types.SSHAuthorizedKey `yaml:"sshAuthorizedKeys"`
 
-	Region ec2.Region
+	Region ec2.Region `yaml:"region"`
 	//AvailabilityZone ec2.AvailabilityZone -- removed in favour of nodepools
-	KMSKeyArn ec2.KMSKeyARN
+	KMSKeyArn ec2.KMSKeyARN `yaml:"kmsKeyArn"`
 
-	Controller ControllerConf
+	Controller ControllerConf `yaml:"controller"`
 
 	//WorkerCount uint -- removing
 	Worker struct {
 		//apiEndpointName  -- removing
-		NodePools []NodepoolConf
-	}
+		NodePools []NodepoolConf `yaml:"nodePools"`
+	} `yaml:"worker"`
 
 	//WorkerCreationTimeout ec2.Timeout  -- removed in favour of nodepools
 	//WorkerInstanceType ec2.InstanceType
@@ -364,34 +364,34 @@ type ClusterYAML struct {
 	//WorkerTenancy
 	//WorkerSpotPrice
 
-	Etcd EtcdConf
+	Etcd EtcdConf `yaml:"etcd"`
 
-	VPCConf
+	VPCConf `yaml:",inline"`
 
-	ServiceCIDR  net.IPNet
-	PodCIDR      net.IPNet
-	DnsServiceIP net.IP
-	MapPublicIPs bool //future:shouldn't it be per nodepool?
+	ServiceCIDR  net.IPNet `yaml:"serviceCIDR"`
+	PodCIDR      net.IPNet `yaml:"podCIDR"`
+	DnsServiceIP net.IP `yaml:"dnsServiceIP"`
+	MapPublicIPs bool  `yaml:"mapPublicIPs"` //future:shouldn't it be per nodepool?
 
 	TLSConf
 	KubernetesContainerImages
 
-	UseCalico              bool
-	ElasticFileSystemId    ec2.EFSId
-	SharedPersistentVolume bool
-	ContainerRuntime       types.ContainerRuntime
+	UseCalico              bool  `yaml:"useCalico"`
+	ElasticFileSystemId    ec2.EFSId  `yaml:"elasticFileSystemId"`
+	SharedPersistentVolume bool `yaml:"sharedPersistentVolume"`
+	ContainerRuntime       types.ContainerRuntime `yaml:"containerRuntime"`
 
-	ManageCertificates      bool
-	WaitSignal              WaitSignalConf // seems to be related to Controllers only, can be deprecate?
-	KubeResourcesAutosave   struct{ Enabled bool }
-	CloudWatchLogging       CloudWatchLoggingConf
-	AmazonSsmAgent          AmazonSSMAgentConf
-	KubeDNS                 struct{ NodeLocalResolver bool }
-	CloudFormationStreaming bool
+	ManageCertificates      bool  `yaml:"manageCertificates"`
+	WaitSignal              WaitSignalConf  `yaml:"waitSignal"` // seems to be related to Controllers only, can be deprecate?
+	KubeResourcesAutosave   struct{ Enabled bool } `yaml:"kubeResourcesAutosave"`
+	CloudWatchLogging       CloudWatchLoggingConf `yaml:"cloudWatchLogging"`
+	AmazonSsmAgent          AmazonSSMAgentConf `yaml:"amazonSsmAgent"`
+	KubeDNS                 struct{ NodeLocalResolver bool } `yaml:"kubeDNS"`
+	CloudFormationStreaming bool `yaml:"cloudFormationStreaming"`
 
-	Addons AddonsConf
+	Addons AddonsConf  `yaml:"addons"`
 
-	StackTags map[ec2.TagName]ec2.TagValue
+	StackTags map[ec2.TagName]ec2.TagValue  `yaml:"StackTags"`
 
-	CustomSettings map[string]interface{}
+	CustomSettings map[string]interface{}  `yaml:"customSettings"`
 }
