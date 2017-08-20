@@ -93,18 +93,27 @@ type MaybeEncryptedOrEphemeralVolume struct {
 	Ephemeral bool // conflicts: Encrypted, broken
 }
 
-type ControllerConf struct {
+type InstanceCommonDescrEmbed struct {
 	Count              uint
 	CreateTimeout      ec2.Timeout
 	InstanceType       ec2.InstanceType
+	Tenancy                   ec2.InstanceTenancy  //new for Controller
 	RootVolume         VolumeConf //validate: must be empty/default device and path
 	SecurityGroupIds   []ec2.SecurityGroupId
-	AutoScalingGroup   ASGConf
 	IAM                IAMConf
 	Subnets            []SubnetConfRef
-	NodeLabels         map[kubernetes.LabelName]kubernetes.LabelValue
 	CustomFiles        []map[string]string
 	CustomSystemdUnits []map[string]string
+	KeyName        ec2.SSHKeyPairName  // new for Etcd,Controller
+	ReleaseChannel coreos.ReleaseChannel //  new for Etcd,Controller
+	AmiId          ec2.AmiId  // new for Etcd, Controller
+	ManagedIamRoleSuffix      ec2.IAMRoleName `yaml:mangedIamRoleName`  //new for Etcd,Ctrl
+}
+
+type ControllerConf struct {
+	InstanceCommonDescrEmbed `yaml:inline`
+	NodeLabels         map[kubernetes.LabelName]kubernetes.LabelValue
+	AutoScalingGroup   ASGConf
 }
 
 // validate: g2 or p2 instance, docker runtime
@@ -153,29 +162,21 @@ type WaitSignalConf struct {
 }
 
 type NodepoolConf struct {
+	InstanceCommonDescrEmbed `yaml:inline`
 	Name             NodePoolName
-	Subnets          []SubnetConfRef
-	SecurityGroupIds []ec2.SecurityGroupId
 	LoadBalancer     struct {
 		Enabled bool
 		Names   []ec2.ELBName
 		//SecurityGroupIds []ec2.SecurityGroup -- removed, duplicate of SGs above
 	}
 	ApiEndpointName APIEndpointName
-	IAM             IAMConf
 	TargetGroup     struct {
 		Enabled bool
 		Arns    []ec2.ALBTargetGroupARN
 		//SecurityGroupIds []ec2.SecurityGroup -- removed, duplicate of SGs above
 	}
-	ManagedIamRoleSuffix      ec2.IAMRoleName `yaml:mangedIamRoleName`
 	VolumeMounts              []VolumeMountConf
 	NodeStatusUpdateFrequency kubernetes.TimePeriod // 10s, 5h
-	Count                     uint
-	InstanceType              ec2.InstanceType
-	RootVolume                VolumeConf
-	CreateTimeout             ec2.Timeout
-	Tenancy                   ec2.InstanceTenancy
 	Gpu                       GpuConf
 
 	//SpotPrice uint -- removed, is listed in SpotFleetConf
@@ -198,25 +199,14 @@ type NodepoolConf struct {
 		Value  kubernetes.TaintValue
 		Effect kubernetes.TaintEffect
 	}
-	KeyName        ec2.SSHKeyPairName
-	ReleaseChannel coreos.ReleaseChannel
-	AmiId          ec2.AmiId
 	KubernetesContainerImages
 	SSHAuthorizedKeys  []types.SSHAuthorizedKey
 	CustomSettings     map[string]string
-	CustomFiles        []map[string]string
-	CustomSystemdUnits []map[string]string
 }
 
 type EtcdConf struct {
-	Count            uint
-	InstanceType     ec2.InstanceType
-	RootVolume       VolumeConf
+	InstanceCommonDescrEmbed `yaml:inline`
 	DataVolume       MaybeEncryptedOrEphemeralVolume
-	Tenancy          ec2.InstanceTenancy
-	Subnets          []SubnetConfRef
-	SecurityGroupIds []ec2.SecurityGroupId
-	IAM              IAMConf
 
 	Version                types.EtcdVersion
 	Snapshot               struct{ Automated bool }
@@ -231,8 +221,6 @@ type EtcdConf struct {
 	}
 
 	KMSKeyArn          ec2.KMSKeyARN
-	CustomFiles        []map[string]string
-	CustomSystemdUnits []map[string]string
 }
 
 type AutoScalingConf struct {
@@ -343,10 +331,10 @@ type AddonsConf struct {
 }
 
 type ClusterYAML struct {
-	ClusterName    types.ClusterName
-	ReleaseChannel coreos.ReleaseChannel
+	ClusterName    types.ClusterName `yaml:"clusterName"`
+	ReleaseChannel coreos.ReleaseChannel `yaml:"releaseChannel"`
 
-	AmiId                       ec2.AmiId
+	AmiId                       ec2.AmiId `yaml:"amiId"`
 	HostedZoneId                ec2.HostedZoneId
 	SshAccessAllowedSourceCIDRs []net.IPNet
 
