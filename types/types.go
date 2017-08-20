@@ -1,5 +1,10 @@
 package types
 
+import(
+	"net/url"
+	"net"
+)
+
 type ClusterName string
 type DNSName string
 type NvidiaDriverVersion string
@@ -17,3 +22,8 @@ type ContainerRuntime string //enum: docker, rkt
 type SHA1SUM string //validate: regex=[a-f0-9]{40}
 
 type Base64Yaml string //validate: base64 decode, then yaml
+
+
+type URL url.URL
+type IPNet net.IPNet
+type IP net.IP

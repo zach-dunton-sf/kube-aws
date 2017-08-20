@@ -7,8 +7,6 @@ import (
 	"github.com/kubernetes-incubator/kube-aws-ng/types/dex"
 	"github.com/kubernetes-incubator/kube-aws-ng/types/ec2"
 	"github.com/kubernetes-incubator/kube-aws-ng/types/kubernetes"
-	"net"
-	"net/url"
 )
 
 type SubnetConfRef struct {
@@ -34,7 +32,7 @@ type RouteTableIdConf struct {
 type SubnetConf struct {
 	Name             ec2.SubnetName
 	AvailabilityZone ec2.AvailabilityZone
-	InstanceCIDR     net.IPNet
+	InstanceCIDR     types.IPNet
 	Private          bool
 	SubnetIdConf
 	NatGateway NGWIdConf
@@ -43,20 +41,20 @@ type SubnetConf struct {
 
 type APIEndpointLoadBalancer struct { // need invariants generator
 	Id              ec2.ELBName
-	CreateRecordSet bool
-	RecordSetTTL    uint
+	CreateRecordSet bool  `yaml:"createRecordSet"`
+	RecordSetTTL    uint `yaml:"recordSetTTL"`
 
 	Subnets                     []SubnetConfRef
 	Private                     bool
-	HostedZone                  ec2.HostedZoneId
-	ApiAccessAllowedSourceCIDRs []net.IPNet
+	HostedZone                  ec2.HostedZoneId `yaml:hostedZone`
+	ApiAccessAllowedSourceCIDRs []types.IPNet `yaml:ApiAccessAllowedSourceCIDRs`
 	SecurityGroupIds            []ec2.SecurityGroupId
 }
 
 type APIEndpointName string
 
 type APIEndpointConf struct {
-	Name    APIEndpointName `yaml:"name"`
+	Name    APIEndpointName 
 	DnsName types.DNSName `yaml:"dnsName"`
 
 	LoadBalancer APIEndpointLoadBalancer `yaml:"loadBalancer"`
@@ -72,7 +70,7 @@ type IAMConf struct {
 	Role struct {
 		ManagedPolicies []ec2.IAMPolicyARN  `yaml:"managedPolicies"`
 		InstanceProfile ec2.InstanceProfileARN `yaml:"instanceProfile"`
-	} `yaml:"role"`
+	}
 }
 
 type VolumeConf struct {
@@ -249,7 +247,7 @@ type VPCConf struct {
 
 	// RouteTableId ec2.RouteTableId -- removed in favour of subnets[].routeTable.id
 
-	VpcCIDR net.IPNet `yaml:vpcCIDR` //future: should be conflicting with vpcID
+	VpcCIDR types.IPNet `yaml:vpcCIDR` //future: should be conflicting with vpcID
 	//InstanceCIDR net.IPNet // -- reomved in favour of nodepools[] and subnets[]
 
 	Subnets []SubnetConf
@@ -272,7 +270,7 @@ type CloudWatchLoggingConf struct {
 
 type AmazonSSMAgentConf struct {
 	Enabled     bool
-	DownloadURL url.URL
+	DownloadURL types.URL
 	Sha1Sum     types.SHA1SUM
 }
 
@@ -301,7 +299,7 @@ type ExperimentalAddonsConf struct {
 
 type DexConf struct {
 	Enabled         bool
-	URL             url.URL
+	URL             types.URL
 	ClientID        dex.ClientID
 	Username        dex.Username
 	SelfSignedCa    bool
@@ -336,7 +334,7 @@ type ClusterYAML struct {
 
 	AmiId                       ec2.AmiId `yaml:"amiId"`
 	HostedZoneId                ec2.HostedZoneId `yaml:"hostedZoneId"`
-	SshAccessAllowedSourceCIDRs []net.IPNet `yaml:"sshAccessAllowedSourceCIDRs"`
+	SshAccessAllowedSourceCIDRs []types.IPNet `yaml:"sshAccessAllowedSourceCIDRs"`
 
 	AdminAPIEndpointName APIEndpointName `yaml:"adminAPIEndpointName"`
 	ApiEndpoints         []APIEndpointConf `yaml:"apiEndpoints"`
@@ -368,9 +366,9 @@ type ClusterYAML struct {
 
 	VPCConf `yaml:",inline"`
 
-	ServiceCIDR  net.IPNet `yaml:"serviceCIDR"`
-	PodCIDR      net.IPNet `yaml:"podCIDR"`
-	DnsServiceIP net.IP `yaml:"dnsServiceIP"`
+	ServiceCIDR  types.IPNet `yaml:"serviceCIDR"`
+	PodCIDR      types.IPNet `yaml:"podCIDR"`
+	DnsServiceIP types.IP `yaml:"dnsServiceIP"`
 	MapPublicIPs bool  `yaml:"mapPublicIPs"` //future:shouldn't it be per nodepool?
 
 	TLSConf
