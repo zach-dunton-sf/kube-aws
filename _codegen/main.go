@@ -5,6 +5,7 @@ import (
   "os"
   "github.com/clipperhouse/typewriter"
   _ "github.com/kubernetes-incubator/kube-aws-ng/_codegen/yamlregexvalidator"
+  _ "github.com/kubernetes-incubator/kube-aws-ng/_codegen/yamlsimpleparse"
 )
 
 func skipTests(f os.FileInfo) bool {

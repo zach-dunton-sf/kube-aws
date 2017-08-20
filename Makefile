@@ -11,6 +11,7 @@ gen: $(wildcard _codegen/*.go _codegen/*/*.go)
 
 codegen: gen
 	cd types/ec2 && ../../gen
+	cd types && ../gen
 
 
 .PHONY: all kube-aws codegen

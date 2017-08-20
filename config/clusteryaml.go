@@ -48,13 +48,13 @@ type APIEndpointLoadBalancer struct { // need invariants generator
 	Private                     bool
 	HostedZone                  ec2.HostedZoneId `yaml:hostedZone`
 	ApiAccessAllowedSourceCIDRs []types.IPNet `yaml:ApiAccessAllowedSourceCIDRs`
-	SecurityGroupIds            []ec2.SecurityGroupId
+	SecurityGroupIds            []ec2.SecurityGroupId `yaml:securityGroupIds`
 }
 
 type APIEndpointName string
 
 type APIEndpointConf struct {
-	Name    APIEndpointName 
+	Name    APIEndpointName
 	DnsName types.DNSName `yaml:"dnsName"`
 
 	LoadBalancer APIEndpointLoadBalancer `yaml:"loadBalancer"`
@@ -74,15 +74,15 @@ type IAMConf struct {
 }
 
 type VolumeConf struct {
-	Size uint `yaml:"size"`
-	Type ec2.VolumeType `yaml:"type"`
-	Iops uint `yaml:"iops"`
+	Size uint
+	Type ec2.VolumeType
+	Iops uint
 }
 
 type VolumeMountConf struct {
 	VolumeConf
-	Device types.BlockDeviceName `yaml:"device"`
-	Path   types.FilesystemPath `yaml:"path"`
+	Device types.BlockDeviceName
+	Path   types.FilesystemPath
 }
 
 type MaybeEncryptedOrEphemeralVolume struct {
@@ -92,26 +92,26 @@ type MaybeEncryptedOrEphemeralVolume struct {
 }
 
 type InstanceCommonDescrEmbed struct {
-	Count              uint `yaml:"count"`
+	Count              uint 
 	CreateTimeout      ec2.Timeout `yaml:"createTimeout"`
 	InstanceType       ec2.InstanceType `yaml:"instanceType"`
-	Tenancy                   ec2.InstanceTenancy `yaml:"tenancy"` //new for Controller
+	Tenancy                   ec2.InstanceTenancy //new for Controller
 	RootVolume         VolumeConf `yaml:rootVolume` //validate: must be empty/default device and path
 	SecurityGroupIds   []ec2.SecurityGroupId `yaml:SecurityGroupIds`
-	IAM                IAMConf `yaml:"iam"`
+	IAM                IAMConf
 	Subnets            []SubnetConfRef
-	CustomFiles        []map[string]string
-	CustomSystemdUnits []map[string]string
 	KeyName        ec2.SSHKeyPairName  // new for Etcd,Controller
 	ReleaseChannel coreos.ReleaseChannel //  new for Etcd,Controller
-	AmiId          ec2.AmiId  // new for Etcd, Controller
+	AmiId          ec2.AmiId   // new for Etcd, Controller
 	ManagedIamRoleSuffix      ec2.IAMRoleName `yaml:mangedIamRoleName`  //new for Etcd,Ctrl
+	CustomFiles        []map[string]interface{}
+	CustomSystemdUnits []map[string]interface{}
 }
 
 type ControllerConf struct {
-	InstanceCommonDescrEmbed
-	NodeLabels         map[kubernetes.LabelName]kubernetes.LabelValue
-	AutoScalingGroup   ASGConf
+	InstanceCommonDescrEmbed `yaml:",inline"`
+	NodeLabels         map[kubernetes.LabelName]kubernetes.LabelValue `yaml:"nodeLabels"`
+	AutoScalingGroup   ASGConf `yaml:"autoScalingGroup"`
 }
 
 // validate: g2 or p2 instance, docker runtime
@@ -127,40 +127,40 @@ type NodePoolName string
 type SpotFleetConf struct{} //TODO
 
 type ContainerImages struct {
-	HyperkubeImage                     model.Image `yaml:"omitempty",default:"{'quay.io/coreos/hyperkube', 'v1.7.3_coreos.0', false}"`
-	AwsCliImage                        model.Image `yaml:"omitempty"`
-	CalicoNodeImage                    model.Image `yaml:"omitempty"`
-	CalicoCniImage                     model.Image `yaml:"omitempty"`
-	CalicoCtlImage                     model.Image `yaml:"omitempty"`
-	CalicoPolicyControllerImage        model.Image `yaml:"omitempty"`
-	ClusterAutoscalerImage             model.Image `yaml:"omitempty"`
-	ClusterProportionalAutoscalerImage model.Image `yaml:"omitempty"`
-	KubeDnsImage                       model.Image `yaml:"omitempty"`
-	KubeDnsMasqImage                   model.Image `yaml:"omitempty"`
-	KubeReschedulerImage               model.Image `yaml:"omitempty"`
-	DnsMasqMetricsImage                model.Image `yaml:"omitempty"`
-	ExecHealthzImage                   model.Image `yaml:"omitempty"`
-	HeapsterImage                      model.Image `yaml:"omitempty"`
-	AddonResizerImage                  model.Image `yaml:"omitempty"`
-	KubeDashboardImage                 model.Image `yaml:"omitempty"`
-	PauseImage                         model.Image `yaml:"omitempty"`
-	FlannelImage                       model.Image `yaml:"omitempty"`
-	DexImage                           model.Image `yaml:"omitempty"`
-	JournaldCloudWatchLogsImage        model.Image `yaml:"journaldCloudWatchLogsImage,omitempty"`
+        HyperkubeImage                     model.Image `yaml:"hyperkubeImage,omitempty",default:"{'quay.io/coreos/hyperkube', 'v1.7.3_coreos.0', false}"`
+        AWSCliImage                        model.Image `yaml:"awsCliImage,omitempty"`
+        CalicoNodeImage                    model.Image `yaml:"calicoNodeImage,omitempty"`
+        CalicoCniImage                     model.Image `yaml:"calicoCniImage,omitempty"`
+        CalicoCtlImage                     model.Image `yaml:"calicoCtlImage,omitempty"`
+        CalicoPolicyControllerImage        model.Image `yaml:"calicoPolicyControllerImage,omitempty"`
+        ClusterAutoscalerImage             model.Image `yaml:"clusterAutoscalerImage,omitempty"`
+        ClusterProportionalAutoscalerImage model.Image `yaml:"clusterProportionalAutoscalerImage,omitempty"`
+        KubeDnsImage                       model.Image `yaml:"kubeDnsImage,omitempty"`
+        KubeDnsMasqImage                   model.Image `yaml:"kubeDnsMasqImage,omitempty"`
+        KubeReschedulerImage               model.Image `yaml:"kubeReschedulerImage,omitempty"`
+        DnsMasqMetricsImage                model.Image `yaml:"dnsMasqMetricsImage,omitempty"`
+        ExecHealthzImage                   model.Image `yaml:"execHealthzImage,omitempty"`
+        HeapsterImage                      model.Image `yaml:"heapsterImage,omitempty"`
+        AddonResizerImage                  model.Image `yaml:"addonResizerImage,omitempty"`
+        KubeDashboardImage                 model.Image `yaml:"kubeDashboardImage,omitempty"`
+        PauseImage                         model.Image `yaml:"pauseImage,omitempty"`
+        FlannelImage                       model.Image `yaml:"flannelImage,omitempty"`
+        DexImage                           model.Image `yaml:"dexImage,omitempty"`
+        JournaldCloudWatchLogsImage        model.Image `yaml:"journaldCloudWatchLogsImage,omitempty"`
 }
 
 type KubernetesContainerImages struct {
-	KubernetesVersion string
-	ContainerImages
+	KubernetesVersion string `yaml:"kubernetesVersion"`
+	ContainerImages `yaml:",inline"`
 }
 
 type WaitSignalConf struct {
-	Enabled      bool 
+	Enabled      bool
 	MaxBatchSize uint `yaml:"maxBatchSize"`//validate: >0
 }
 
 type NodepoolConf struct {
-	InstanceCommonDescrEmbed `yaml:,inline`
+	InstanceCommonDescrEmbed `yaml:",inline"`
 	Name             NodePoolName
 	LoadBalancer     struct {
 		Enabled bool
@@ -197,13 +197,12 @@ type NodepoolConf struct {
 		Value  kubernetes.TaintValue
 		Effect kubernetes.TaintEffect
 	}
-	KubernetesContainerImages
+	KubernetesContainerImages `yaml:",inline"`
 	SSHAuthorizedKeys  []types.SSHAuthorizedKey
-	CustomSettings     map[string]string
 }
 
 type EtcdConf struct {
-	InstanceCommonDescrEmbed `yaml:inline`
+	InstanceCommonDescrEmbed `yaml:",inline"`
 	DataVolume       MaybeEncryptedOrEphemeralVolume
 
 	Version                types.EtcdVersion
