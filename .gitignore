@@ -1,3 +1,4 @@
 gen
 kube-aws
 *_regex.go
+*_parse.go
