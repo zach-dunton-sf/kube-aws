@@ -208,10 +208,10 @@ type EtcdConf struct {
 	Version                types.EtcdVersion
 	Snapshot               struct{ Automated bool }
 	DisasterRecovery       struct{ Automated bool }
-	MemberIdentityProvider types.EtcdMemberIdentityProvider
-	InternalDomainName     types.DNSName
-	ManageRecordSets       bool
-	HostedZone             struct{ Id ec2.HostedZoneId }
+	MemberIdentityProvider types.EtcdMemberIdentityProvider `yaml:"memberIdentityProvider"`
+	InternalDomainName     types.DNSName `yaml:"internalDomainName"`
+	ManageRecordSets       bool `yaml:"manageRecordSets"`
+	HostedZone             struct{ Id ec2.HostedZoneId } `yaml:"hostedZone"`
 	Nodes                  []struct {
 		Name types.EtcdMemberIdentifier
 		Fqdn types.DNSName
@@ -275,25 +275,8 @@ type AmazonSSMAgentConf struct {
 
 type AuditLogConf struct {
 	Enabled bool
-	MaxAge  uint `yaml:maxAge`
-	LogPath string `yaml:logPath`
-}
-
-type ExperimentalAddonsConf struct {
-	Admission struct {
-		podSecurityPolicy  struct{ Enabled bool }
-		denyEscalatingExec struct{ Enabled bool }
-	}
-
-	AwsEnvironment EtcAwsEnvironmentConf // q:found bare in nodepool, does it mean rest of experimental can be found there too?
-	AuditLog       AuditLogConf
-	Authentication struct {
-		Webhook struct {
-			Enabled      bool
-			cacheTTL     kubernetes.TimePeriod
-			configBase64 types.Base64Yaml
-		}
-	}
+	MaxAge  uint
+	LogPath string
 }
 
 type DexConf struct {
@@ -310,21 +293,35 @@ type DexConf struct {
 type AddonsConf struct {
 	ClusterAutoscaler struct{ Enabled bool }
 	Rescheduler       struct{ Enabled bool }
+}
 
-	ExperimentalAddonsConf
+type ExperimentalConf struct {
+	Admission struct {
+		PodSecurityPolicy  struct{ Enabled bool } `yaml:"podSecurityPolicy"`
+		DenyEscalatingExec struct{ Enabled bool } `yaml:"denyEscalatingExec"`
+	}
 
+	AwsEnvironment EtcAwsEnvironmentConf // q:found bare in nodepool, does it mean rest of experimental can be found there too?
+	AuditLog       AuditLogConf
+	Authentication struct {
+		Webhook struct {
+			Enabled      bool
+			cacheTTL     kubernetes.TimePeriod
+			configBase64 types.Base64Yaml
+		}
+	}
 	AwsNodeLabels       struct{ Enabled bool }
-	TlsBootstrap        struct{ Enabled bool }
-	ephemeralImageStore struct{ Enabled bool }
-	Kube2IamSupport     struct{ Enabled bool }
-	NodeDrainer         struct{ Enabled bool }
+	TLSBootstrap        struct{ Enabled bool } `yaml:"tlsBootstrap"`
+	EphemeralImageStore struct{ Enabled bool } `yaml:"ephemeralImageStorage"`
+	Kube2IamSupport     struct{ Enabled bool } `yaml:"kube2IamSupport"`
+	NodeDrainer         struct{ Enabled bool } `yaml:"NodeDrainer"`
 
 	Dex     DexConf
 	Plugins struct {
 		Rbac struct{ Enabled bool }
 	}
-	DisableSecurityGroupIngress bool
-	NodeMonitorGracePeriod      kubernetes.TimePeriod
+	DisableSecurityGroupIngress bool `yaml:"disableSecurityGroupIngress"`
+	NodeMonitorGracePeriod      kubernetes.TimePeriod `yaml:"nodeMonitorGracePeriod"`
 }
 
 type ClusterYAML struct {
@@ -386,7 +383,8 @@ type ClusterYAML struct {
 	KubeDNS                 struct{ NodeLocalResolver bool } `yaml:"kubeDNS"`
 	CloudFormationStreaming bool `yaml:"cloudFormationStreaming"`
 
-	Addons AddonsConf  `yaml:"addons"`
+	Addons AddonsConf
+	Experimental ExperimentalConf
 
 	StackTags map[ec2.TagName]ec2.TagValue  `yaml:"StackTags"`
 
