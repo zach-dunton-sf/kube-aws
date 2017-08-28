@@ -31,10 +31,10 @@ type RouteTableIdConf struct {
 
 type SubnetConf struct {
 	Name             ec2.SubnetName
-	AvailabilityZone ec2.AvailabilityZone
-	InstanceCIDR     types.IPNet
+	AvailabilityZone ec2.AvailabilityZone `yaml:"availabilityZone"`
+	InstanceCIDR     types.IPNet `yaml:"instanceCIDR"`
 	Private          bool
-	SubnetIdConf
+	SubnetIdConf `yaml:",inline"`
 	NatGateway NGWIdConf
 	RouteTable RouteTableIdConf
 }
@@ -183,9 +183,7 @@ type NodepoolConf struct {
 	SpotFleet        SpotFleetConf
 
 	Autoscaling              AutoScalingConf
-	AwsEnvironment           EtcAwsEnvironmentConf
-	AwsNodeLabels            struct{ Enabled bool }
-	ClusterAutoscalerSupport struct{ Enabled bool } //SuPER confusing with `autoscaling:`
+	ExperimentalNodepoolSubsetConf `yaml:",inline"`
 	ElasticFileSystemId      ec2.EFSId
 	EphemeralImageStorage    struct{ Enabled bool }
 	Kube2IamSupport          struct{ Enabled bool }
@@ -199,6 +197,7 @@ type NodepoolConf struct {
 	}
 	KubernetesContainerImages `yaml:",inline"`
 	SSHAuthorizedKeys  []types.SSHAuthorizedKey
+	CustomSettings map[string]interface{} `yaml:"customSettings"`
 }
 
 type EtcdConf struct {
@@ -223,7 +222,7 @@ type EtcdConf struct {
 type AutoScalingConf struct {
 	ClusterAutoScaler struct {
 		Enabled bool
-	} `yaml:clusterAutoScaler`
+	} `yaml:"clusterAutoScaler"`
 }
 
 type EtcAwsEnvironmentConf struct {
@@ -259,7 +258,7 @@ type TLSConf struct {
 
 type CloudWatchLoggingConf struct {
 	Enabled         bool
-	RetentionInDays uint `yaml:retentionInDays`
+	RetentionInDays uint `yaml:"retentionInDays"`
 	LocalStreaming  struct {
 		Enabled  bool
 		Filter   string
@@ -291,17 +290,29 @@ type DexConf struct {
 }
 
 type AddonsConf struct {
-	ClusterAutoscaler struct{ Enabled bool }
-	Rescheduler       struct{ Enabled bool }
+	ClusterAutoscaler struct{ Enabled bool } `yaml:"clusterAutoscaler"`
+	Rescheduler       struct{ Enabled bool } 
+}
+
+
+// subset of experimental flags which can be listed in nodepool config
+// (for some reason they are listed inline, not under experimental: field)
+type ExperimentalNodepoolSubsetConf struct {
+	AwsEnvironment EtcAwsEnvironmentConf
+	AwsNodeLabels       struct{ Enabled bool }
+	ClusterAutoscalerSupport struct{ Enabled bool } `yaml:"clusterAutoscalerSupport"`
+	NodeDrainer         struct{ Enabled bool } `yaml:"nodeDrainer"`
+	Kube2IamSupport     struct{ Enabled bool } `yaml:"kube2IamSupport"`
+	TLSBootstrap        struct{ Enabled bool } `yaml:"tlsBootstrap"`
 }
 
 type ExperimentalConf struct {
+	ExperimentalNodepoolSubsetConf `yaml:",inline"`
 	Admission struct {
 		PodSecurityPolicy  struct{ Enabled bool } `yaml:"podSecurityPolicy"`
 		DenyEscalatingExec struct{ Enabled bool } `yaml:"denyEscalatingExec"`
 	}
 
-	AwsEnvironment EtcAwsEnvironmentConf // q:found bare in nodepool, does it mean rest of experimental can be found there too?
 	AuditLog       AuditLogConf
 	Authentication struct {
 		Webhook struct {
@@ -310,12 +321,7 @@ type ExperimentalConf struct {
 			configBase64 types.Base64Yaml
 		}
 	}
-	AwsNodeLabels       struct{ Enabled bool }
-	TLSBootstrap        struct{ Enabled bool } `yaml:"tlsBootstrap"`
 	EphemeralImageStore struct{ Enabled bool } `yaml:"ephemeralImageStorage"`
-	Kube2IamSupport     struct{ Enabled bool } `yaml:"kube2IamSupport"`
-	NodeDrainer         struct{ Enabled bool } `yaml:"NodeDrainer"`
-
 	Dex     DexConf
 	Plugins struct {
 		Rbac struct{ Enabled bool }
@@ -367,8 +373,8 @@ type ClusterYAML struct {
 	DnsServiceIP types.IP `yaml:"dnsServiceIP"`
 	MapPublicIPs bool  `yaml:"mapPublicIPs"` //future:shouldn't it be per nodepool?
 
-	TLSConf
-	KubernetesContainerImages
+	TLSConf `yaml:",inline"`
+	KubernetesContainerImages `yaml:",inline"`
 
 	UseCalico              bool  `yaml:"useCalico"`
 	ElasticFileSystemId    ec2.EFSId  `yaml:"elasticFileSystemId"`
@@ -386,7 +392,7 @@ type ClusterYAML struct {
 	Addons AddonsConf
 	Experimental ExperimentalConf
 
-	StackTags map[ec2.TagName]ec2.TagValue  `yaml:"StackTags"`
+	StackTags map[ec2.TagName]ec2.TagValue  `yaml:"stackTags"`
 
 	CustomSettings map[string]interface{}  `yaml:"customSettings"`
 }
