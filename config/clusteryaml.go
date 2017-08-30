@@ -46,9 +46,9 @@ type APIEndpointLoadBalancer struct { // need invariants generator
 
 	Subnets                     []SubnetConfRef
 	Private                     bool
-	HostedZone                  ec2.HostedZoneId `yaml:hostedZone`
-	ApiAccessAllowedSourceCIDRs []types.IPNet `yaml:ApiAccessAllowedSourceCIDRs`
-	SecurityGroupIds            []ec2.SecurityGroupId `yaml:securityGroupIds`
+	HostedZone                  ec2.HostedZoneId `yaml:"hostedZone"`
+	ApiAccessAllowedSourceCIDRs []types.IPNet `yaml:"ApiAccessAllowedSourceCIDRs"`
+	SecurityGroupIds            []ec2.SecurityGroupId `yaml:"securityGroupIds"`
 }
 
 type APIEndpointName string
@@ -112,6 +112,10 @@ type ControllerConf struct {
 	InstanceCommonDescrEmbed `yaml:",inline"`
 	NodeLabels         map[kubernetes.LabelName]kubernetes.LabelValue `yaml:"nodeLabels"`
 	AutoScalingGroup   ASGConf `yaml:"autoScalingGroup"`
+	LoadBalancer       struct {
+		Private bool
+		Subnets []SubnetConfRef
+	}       `yaml:"loadBalancer,omitempty"` // how is it connected to apiEndpoints ELBs?
 }
 
 // validate: g2 or p2 instance, docker runtime
@@ -179,7 +183,7 @@ type NodepoolConf struct {
 
 	//SpotPrice uint -- removed, is listed in SpotFleetConf
 	WaitSignal       WaitSignalConf
-	AutoScalingGroup ASGConf
+	AutoScalingGroup ASGConf `yaml:"autoScalingGroup"`
 	SpotFleet        SpotFleetConf
 
 	Autoscaling              AutoScalingConf
@@ -245,7 +249,7 @@ type VPCConf struct {
 
 	// RouteTableId ec2.RouteTableId -- removed in favour of subnets[].routeTable.id
 
-	VpcCIDR types.IPNet `yaml:vpcCIDR` //future: should be conflicting with vpcID
+	VpcCIDR types.IPNet `yaml:"vpcCIDR"` //future: should be conflicting with vpcID
 	//InstanceCIDR net.IPNet // -- reomved in favour of nodepools[] and subnets[]
 
 	Subnets []SubnetConf
